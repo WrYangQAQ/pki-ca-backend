@@ -25,21 +25,6 @@ public class UserService {
     @Autowired
     public OperationLogService logService;
 
-    public UserEntity addUser(UserEntity user) {
-        // 保存用户
-        UserEntity savedUser = userRepository.save(user);
-
-        // 写入操作日志
-        logService.record(
-                "System",                     // 暂时写死，之后改成登录用户
-                "注册用户",
-                savedUser.getUsername(),
-                "邮箱：" + savedUser.getEmail()
-        );
-
-        return savedUser;
-    }
-
     public boolean exists(String username) {
         return userRepository.existsByUsername(username);
     }
