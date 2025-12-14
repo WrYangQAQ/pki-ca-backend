@@ -28,7 +28,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // 用户登录与注册接口 允许所有人访问
                         .requestMatchers(
-                                "/api/users/auth/**",
+                                "/api/users/auth/challenge",
                                 "/api/users/auth/login",
                                 "/api/users/register"
                         ).permitAll()
