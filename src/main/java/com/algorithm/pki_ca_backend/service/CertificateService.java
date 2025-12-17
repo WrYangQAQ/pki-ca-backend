@@ -1,8 +1,9 @@
 package com.algorithm.pki_ca_backend.service;
 
 import com.algorithm.pki_ca_backend.entity.CertificateEntity;
-import com.algorithm.pki_ca_backend.entity.CertificateRequestEntity;
+import com.algorithm.pki_ca_backend.entity.CertificateApplicationRequestEntity;
 import com.algorithm.pki_ca_backend.entity.UserEntity;
+import com.algorithm.pki_ca_backend.exception.CertificateIssueException;
 import com.algorithm.pki_ca_backend.repository.CRLRepository;
 import com.algorithm.pki_ca_backend.repository.CertificateRepository;
 import com.algorithm.pki_ca_backend.repository.UserRepository;
@@ -64,22 +65,31 @@ public class CertificateService {
         return savedCert;
     }
 
-    // 基于证书申请的 CA 签发流程（新接口，ADMIN 专用）
+    // 基于证书申请的 CA 签发流程（新方法，ADMIN 专用）
     public CertificateEntity issueCertificateFromRequest(
-            CertificateRequestEntity request,
+            CertificateApplicationRequestEntity request,
             String operatorUsername   // ADMIN 用户名，用于日志
-    ) {
+    ) throws CertificateIssueException {
 
         UserEntity user = request.getUser();
 
         // 1. 生成唯一序列号
         String serialNumber = "SN-" + System.currentTimeMillis();
 
-        // 2. 使用 CA 私钥签发证书（下一步我们会实现真正逻辑）
-        String certPem = CertificateUtil.issueX509(
-                request.getPublicKey(),
-                serialNumber
-        );
+        // 2. 使用 CA 私钥签发证书
+        String certPem;
+        try {
+            certPem = CertificateUtil.issueX509(
+                    request.getPublicKey(),
+                    serialNumber
+            );
+        } catch (CertificateIssueException e) {
+            // 在 Service 层补充业务上下文信息
+            throw new CertificateIssueException(
+                    "为用户 [" + user.getUsername() + "] 签发证书失败",
+                    e
+            );
+        }
 
         // 3. 构造证书实体
         CertificateEntity cert = new CertificateEntity();

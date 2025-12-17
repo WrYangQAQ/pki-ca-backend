@@ -23,7 +23,7 @@ public class CRLController{
         return ApiResponse.success(list);
     }
 
-    // 吊销证书
+    // 吊销证书(！！！旧吊销接口，不再使用)
     @PostMapping("/revoke")
     public ApiResponse<CRLEntity> revokeCertificate(@RequestBody Map<String, Object> payload){
 

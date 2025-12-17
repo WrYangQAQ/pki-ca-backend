@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 @Data
 @Entity
 @Table(name = "CertificateRequests")
-public class CertificateRequestEntity {
+public class CertificateApplicationRequestEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -28,5 +28,16 @@ public class CertificateRequestEntity {
     private LocalDateTime requestTime;
 
     private LocalDateTime approveTime;
+
+    // ===== 拒绝相关字段 =====
+
+    @Column(name = "RejectTime")
+    private LocalDateTime rejectTime;
+
+    @Column(name = "RejectReason", length = 500)
+    private String rejectReason;
+
+    @Column(name = "RejectBy", length = 100)
+    private String rejectBy;
 }
 

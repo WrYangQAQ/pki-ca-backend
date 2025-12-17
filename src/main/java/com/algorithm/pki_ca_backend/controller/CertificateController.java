@@ -2,15 +2,17 @@ package com.algorithm.pki_ca_backend.controller;
 
 import com.algorithm.pki_ca_backend.dto.ApiResponse;
 import com.algorithm.pki_ca_backend.entity.CertificateEntity;
-import com.algorithm.pki_ca_backend.entity.CertificateRequestEntity;
+import com.algorithm.pki_ca_backend.entity.CertificateApplicationRequestEntity;
+import com.algorithm.pki_ca_backend.entity.CertificateRevocationRequestEntity;
 import com.algorithm.pki_ca_backend.entity.UserEntity;
-import com.algorithm.pki_ca_backend.repository.CertificateRequestRepository;
+import com.algorithm.pki_ca_backend.repository.CertificateApplicationRequestRepository;
+import com.algorithm.pki_ca_backend.repository.CertificateRepository;
+import com.algorithm.pki_ca_backend.repository.CertificateRevocationRequestRepository;
 import com.algorithm.pki_ca_backend.repository.UserRepository;
 import com.algorithm.pki_ca_backend.service.CertificateService;
 import com.algorithm.pki_ca_backend.service.OperationLogService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -18,25 +20,35 @@ import org.springframework.security.core.Authentication;
 
 
 import java.time.LocalDateTime;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 @RestController
 @RequestMapping("/api/certificates")
 public class CertificateController{
 
     private final UserRepository userRepository;
-    private final CertificateRequestRepository requestRepository;
+    private final CertificateApplicationRequestRepository applyRequestRepository;
+    private final CertificateRevocationRequestRepository revokeRequestRepository;
+    private final CertificateRepository certificateRepository;
+
 
     // 构造器注入
     public CertificateController(
             UserRepository userRepository,
-            CertificateRequestRepository requestRepository
+            CertificateApplicationRequestRepository applyRequestRepository,
+            CertificateRevocationRequestRepository revokeRequestRepository,
+            CertificateRepository certificateRepository,
+            OperationLogService logService,
+            CertificateService certificateService
     ) {
         this.userRepository = userRepository;
-        this.requestRepository = requestRepository;
+        this.applyRequestRepository = applyRequestRepository;
+        this.revokeRequestRepository = revokeRequestRepository;
+        this.certificateRepository = certificateRepository;
+        this.logService = logService;
+        this.certificateService = certificateService;
     }
+
 
     @Autowired
     private OperationLogService logService;
@@ -49,6 +61,36 @@ public class CertificateController{
     public ApiResponse<List<CertificateEntity>> getAllCertificates(){
         List<CertificateEntity> list = certificateService.getAllCertificates();
         return ApiResponse.success(list);
+    }
+
+    // 查询自己的证书
+    @GetMapping("/my")
+    public ApiResponse<List<Map<String, Object>>> getMyCertificates(
+            Authentication authentication
+    ) {
+        String username = authentication.getName();
+
+        Optional<UserEntity> userOpt = userRepository.findByUsername(username);
+        if (userOpt.isEmpty()) {
+            return ApiResponse.fail("用户不存在");
+        }
+        UserEntity user = userOpt.get();
+
+        List<CertificateEntity> certs =
+                certificateRepository.findByUser(user);
+
+        List<Map<String, Object>> result = new ArrayList<>();
+
+        for (CertificateEntity cert : certs) {
+            Map<String, Object> item = new HashMap<>();
+            item.put("serialNumber", cert.getSerialNumber());
+            item.put("status", certificateService.evaluateCertificateStatus(cert));
+            item.put("validFrom", cert.getValidFrom());
+            item.put("validTo", cert.getValidTo());
+            result.add(item);
+        }
+
+        return ApiResponse.success(result);
     }
 
     // 签发新证书（！！！ 签发旧接口，不再使用，但为了系统稳定不进行删除）
@@ -80,7 +122,7 @@ public class CertificateController{
         return ApiResponse.success(status);
     }
 
-    // 根据SerialNumber查询证书
+    // 根据SerialNumber查询证书(只查询证书状态)
     @GetMapping("/status")
     public ApiResponse<String> getCertificateStatusBySerialNumber(@RequestParam String serialNumber){
 
@@ -95,7 +137,7 @@ public class CertificateController{
         return ApiResponse.success(status);
     }
 
-    // 根据SerialNumber的证书验证接口
+    // 根据SerialNumber的证书验证接口(更加详细的查询接口，返回证书状态以及具体起用，过期时间)
     @GetMapping("/{serialNumber}/verify")
     public ApiResponse<Map<String, Object>> verifyCertificate(
             @PathVariable String serialNumber){
@@ -124,22 +166,25 @@ public class CertificateController{
         return ApiResponse.success(data);
     }
 
-    @PostMapping("/apply")
+    // 发出证书申请请求
+    @PostMapping("/apply-request")
     public ApiResponse<Long> applyCertificate(Authentication authentication) {
 
         String username = authentication.getName();
+        Optional<UserEntity> userOpt = userRepository.findByUsername(username);
+        if (userOpt.isEmpty()) {
+            return ApiResponse.fail("用户不存在");
+        }
+        UserEntity user = userOpt.get();
 
-        UserEntity user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("用户不存在"));
-
-        CertificateRequestEntity req = new CertificateRequestEntity();
+        CertificateApplicationRequestEntity req = new CertificateApplicationRequestEntity();
         req.setUser(user);
         req.setPublicKey(user.getPublicKey());
         req.setStatus("PENDING");
         req.setRequestTime(LocalDateTime.now());
 
         // 持久化保存
-        CertificateRequestEntity saved = requestRepository.save(req);
+        CertificateApplicationRequestEntity saved = applyRequestRepository.save(req);
 
         // 记录日志
         logService.record(
@@ -152,39 +197,70 @@ public class CertificateController{
         return ApiResponse.success(saved.getRequestId());
     }
 
-    // 查询待签发证书列表
-    @GetMapping("/requests")
-    public ApiResponse<List<CertificateRequestEntity>> listPendingRequests() {
-        return ApiResponse.success(requestRepository.findByStatus("PENDING"));
-    }
+    // 发出证书吊销申请请求
+    @PostMapping("/{serialNumber}/revoke-request")
+    public ApiResponse<Long> revokeCertificate(
+            @PathVariable String serialNumber,
+            @RequestBody Map<String, String> body,
+            Authentication authentication
+    ) {
 
-    // 签发待签发列表中的证书
-    @PostMapping("/requests/{id}/approve")
-    public ApiResponse<Long> approveRequest(@PathVariable Long id, Authentication authentication){
-        // 1. 查找证书申请
-        CertificateRequestEntity req = requestRepository.findById(id)
-                .orElseThrow(() -> new RuntimeException("证书申请不存在"));
+        String username = authentication.getName();
+        Optional<UserEntity> userOpt = userRepository.findByUsername(username);
+        if (userOpt.isEmpty()) {
+            return ApiResponse.fail("用户不存在");
+        }
+        UserEntity user = userOpt.get();
 
-        // 2. 校验状态
-        if (!"PENDING".equals(req.getStatus())) {
-            return ApiResponse.fail("该申请不是待审批状态");
+        // 查询证书
+        Optional<CertificateEntity> certOpt = certificateRepository.findBySerialNumber(serialNumber);
+        if (certOpt.isEmpty()) {
+            return ApiResponse.fail("证书不存在");
+        }
+        CertificateEntity cert = certOpt.get();
+
+        // 校验证书归属
+        if (!cert.getUser().getUserId().equals(user.getUserId())) {
+            return ApiResponse.fail("无权吊销该证书");
         }
 
-        // 3. 调用 CA 服务签发证书
-        CertificateEntity cert = certificateService.issueCertificateFromRequest(
-                req,
-                authentication.getName()   // ADMIN 用户名
+        // 校验证书状态
+        if (!"有效".equals(cert.getStatus())) {
+            return ApiResponse.fail("当前证书状态不可申请吊销");
+        }
+
+        // 吊销原因
+        String reason = body.get("reason");
+        if (reason == null || reason.trim().isEmpty()) {
+            return ApiResponse.fail("请填写吊销原因");
+        }
+
+        // 构造吊销申请
+        CertificateRevocationRequestEntity req =
+                new CertificateRevocationRequestEntity();
+        req.setCertificate(cert);
+        req.setUser(user);
+        req.setReason(reason.trim());
+        req.setStatus("PENDING");
+        req.setRequestTime(LocalDateTime.now());
+
+        // 持久化保存
+        CertificateRevocationRequestEntity saved =
+                revokeRequestRepository.save(req);
+
+        // 记录日志
+        logService.record(
+                username,
+                "申请吊销证书",
+                "CertificateRevocationRequest",
+                "requestId=" + saved.getRequestId()
         );
 
-        // 4. 更新申请状态
-        req.setStatus("APPROVED");
-        req.setApproveTime(LocalDateTime.now());
-        requestRepository.save(req);
-
-        // 5. 返回证书 ID
-        return ApiResponse.success(cert.getCertId().longValue());
+        return ApiResponse.success(saved.getRequestId());
     }
 
+
+    // 根据证书id下载证书
     @GetMapping("/{certId}/download")
     public ResponseEntity<String> downloadCertificate(
             @PathVariable Integer certId,
@@ -215,4 +291,6 @@ public class CertificateController{
                 .contentType(MediaType.valueOf("application/x-pem-file"))
                 .body(cert.getCertPEM());
     }
+
+
 }

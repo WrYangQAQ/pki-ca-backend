@@ -1,5 +1,6 @@
 package com.algorithm.pki_ca_backend.util;
 
+import com.algorithm.pki_ca_backend.exception.CertificateIssueException;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.*;
 import org.bouncycastle.cert.X509CertificateHolder;
@@ -32,7 +33,8 @@ public class CertificateUtil {
         Security.addProvider(new BouncyCastleProvider());
     }
 
-    public static String issueX509(String userPublicKeyPem, String serialNumber) {
+
+    public static String issueX509(String userPublicKeyPem, String serialNumber) throws CertificateIssueException {
 
         try {
             // 1. 读取 CA 私钥
@@ -107,21 +109,21 @@ public class CertificateUtil {
             return sw.toString();
 
         } catch (Exception e) {
-            throw new RuntimeException("X509 证书签发失败", e);
+            throw new CertificateIssueException("X509 证书签发失败：" + e.getMessage(), e);
         }
     }
 
     // ===== 工具方法 =====
 
     // 加载CA私钥
-    private static PrivateKey loadCaPrivateKey() throws Exception {
+    private static PrivateKey loadCaPrivateKey() throws CertificateIssueException {
 
         InputStream is = CertificateUtil.class
                 .getClassLoader()
                 .getResourceAsStream("ca/ca.key.pem");
 
         if (is == null) {
-            throw new RuntimeException("未找到 ca.key.pem");
+            throw new CertificateIssueException("CA 私钥文件 ca.key.pem 未找到");
         }
 
         try (PEMParser parser = new PEMParser(new InputStreamReader(is))) {
@@ -140,9 +142,13 @@ public class CertificateUtil {
                 return converter.getPrivateKey(keyInfo);
             }
 
-            throw new IllegalStateException(
-                    "不支持的 CA 私钥格式：" + obj.getClass().getName()
-            );
+            throw new CertificateIssueException("不支持的 CA 私钥格式：" + obj.getClass().getName());
+        } catch (CertificateIssueException e){
+            // 业务异常，直接向上抛
+            throw e;
+        } catch (Exception e) {
+            // IO / PEM 解析异常，统一包装
+            throw new CertificateIssueException("加载 CA 私钥失败：" + e.getMessage(), e);
         }
     }
 

@@ -26,7 +26,7 @@ public class CRLService {
         return crlRepository.findAll();
     }
 
-    // 吊销证书
+    // 吊销证书(此处为旧吊销接口使用方法，为了维持系统稳定，此处仍然抛出RuntimeExcpetion，不进行ApiResponse的更改)
     public CRLEntity revokeCertificate(Integer certId, String reason) {
         CertificateEntity cert = certificateRepository.findById(certId)
                 .orElseThrow(() -> new RuntimeException("证书不存在，无法吊销！"));
