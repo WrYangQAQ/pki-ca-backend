@@ -83,7 +83,7 @@ public class UserController {
 
         // 3) 公钥验签（用服务端保存的 challenge）
         try {
-            var publicKey = RsaSignatureUtil.parseRsaPublicKey(user.getPublicKey());
+            var publicKey = RsaSignatureUtil.parseRsaPublicKey(user.getLoginPublicKey());
 
             boolean verified = RsaSignatureUtil.verifySha256WithRsa(
                     publicKey,

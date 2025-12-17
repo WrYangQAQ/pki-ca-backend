@@ -1,16 +1,22 @@
 package com.algorithm.pki_ca_backend.controller;
 
 import com.algorithm.pki_ca_backend.dto.ApiResponse;
+import com.algorithm.pki_ca_backend.dto.CertificateApplyRequestDto;
+import com.algorithm.pki_ca_backend.dto.CsrBindChallenge;
+import com.algorithm.pki_ca_backend.dto.CsrInfo;
 import com.algorithm.pki_ca_backend.entity.CertificateEntity;
 import com.algorithm.pki_ca_backend.entity.CertificateApplicationRequestEntity;
 import com.algorithm.pki_ca_backend.entity.CertificateRevocationRequestEntity;
 import com.algorithm.pki_ca_backend.entity.UserEntity;
+import com.algorithm.pki_ca_backend.exception.CertificateIssueException;
 import com.algorithm.pki_ca_backend.repository.CertificateApplicationRequestRepository;
 import com.algorithm.pki_ca_backend.repository.CertificateRepository;
 import com.algorithm.pki_ca_backend.repository.CertificateRevocationRequestRepository;
 import com.algorithm.pki_ca_backend.repository.UserRepository;
 import com.algorithm.pki_ca_backend.service.CertificateService;
+import com.algorithm.pki_ca_backend.service.CsrChallengeService;
 import com.algorithm.pki_ca_backend.service.OperationLogService;
+import com.algorithm.pki_ca_backend.util.CertificateUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -55,6 +61,9 @@ public class CertificateController{
 
     @Autowired
     private CertificateService certificateService;
+
+    @Autowired
+    private CsrChallengeService csrChallengeService;
 
     // 查询所有证书
     @GetMapping
@@ -168,33 +177,69 @@ public class CertificateController{
 
     // 发出证书申请请求
     @PostMapping("/apply-request")
-    public ApiResponse<Long> applyCertificate(Authentication authentication) {
+    public ApiResponse<Long> applyCertificate(
+            Authentication authentication,
+            @RequestBody CertificateApplyRequestDto body
+    ) {
+        // 返回请求体为空的API响应
+        if (body == null) {
+            return ApiResponse.fail("请求体不能为空");
+        }
+
+        // 返回CSR为空的API响应
+        if (body == null || body.getCsrPem() == null || body.getCsrPem().trim().isEmpty()) {
+            return ApiResponse.fail("csrPem 不能为空");
+        }
+
+        // 返回challenge签名为空的API响应
+        if (body.getCsrSignature() == null || body.getCsrSignature().trim().isEmpty()) {
+            return ApiResponse.fail("csrSignature 不能为空");
+        }
 
         String username = authentication.getName();
         Optional<UserEntity> userOpt = userRepository.findByUsername(username);
+
+
         if (userOpt.isEmpty()) {
             return ApiResponse.fail("用户不存在");
         }
-        UserEntity user = userOpt.get();
 
-        CertificateApplicationRequestEntity req = new CertificateApplicationRequestEntity();
-        req.setUser(user);
-        req.setPublicKey(user.getPublicKey());
-        req.setStatus("PENDING");
-        req.setRequestTime(LocalDateTime.now());
+        CsrBindChallenge csrBindChallenge = csrChallengeService.get(username);
+        if (csrBindChallenge == null) {
+            return ApiResponse.fail("CSR challenge 不存在，请重新获取");
+        }
+        if (csrBindChallenge == null || csrBindChallenge.isExpired()) {
+            return ApiResponse.fail("CSR challenge 无效或已过期");
+        }
 
-        // 持久化保存
-        CertificateApplicationRequestEntity saved = applyRequestRepository.save(req);
+        try {
+            CsrInfo csrInfo = CertificateUtil.parseAndVerifyCsr(body.getCsrPem());
+            CertificateUtil.verifyCsrBinding(csrInfo.getCsrPublicKey(),
+                                             csrBindChallenge.getChallenge(),
+                                             body.getCsrSignature()
+            );
 
-        // 记录日志
-        logService.record(
-                username,
-                "申请证书",
-                "CertificateRequest",
-                "requestId=" + saved.getRequestId()
-        );
+            csrChallengeService.consume(username); // 一次性
 
-        return ApiResponse.success(saved.getRequestId());
+            CertificateApplicationRequestEntity req = new CertificateApplicationRequestEntity();
+            req.setUser(userOpt.get());
+            req.setCsrPem(body.getCsrPem().trim());
+            req.setStatus("PENDING");
+            req.setRequestTime(LocalDateTime.now());
+
+            CertificateApplicationRequestEntity saved = applyRequestRepository.save(req);
+
+            logService.record(
+                    username,
+                    "申请证书（CSR + Challenge 绑定）",
+                    "CertificateRequest",
+                    "requestId=" + saved.getRequestId()
+            );
+            return ApiResponse.success(saved.getRequestId());
+
+        } catch (CertificateIssueException e) {
+            return ApiResponse.fail(e.getMessage());
+        }
     }
 
     // 发出证书吊销申请请求
@@ -292,5 +337,10 @@ public class CertificateController{
                 .body(cert.getCertPEM());
     }
 
-
+    // 请求一个CSR challenge
+    @PostMapping("/csr/challenge")
+    public ApiResponse<String> getCsrChallenge(Authentication authentication) {
+        String username = authentication.getName();
+        return ApiResponse.success(csrChallengeService.generate(username).getChallenge());
+    }
 }

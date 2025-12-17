@@ -41,16 +41,13 @@ public class CertificateApplicationRequestController{
         this.applyRequestRepository = applyRequestRepository;
     }
 
-
-
-
     // 查询待签发证书列表
     @GetMapping("/apply-requests")
     public ApiResponse<List<CertificateApplicationRequestEntity>> listPendingRequests() {
         return ApiResponse.success(applyRequestRepository.findByStatus("PENDING"));
     }
 
-    // 签发待签发列表中的证书
+    // 同意请求，完成对请求中CSR的证书签发
     @PostMapping("/apply-requests/{id}/approve")
     public ApiResponse<Long> approveRequest(@PathVariable Long id, Authentication authentication){
         // 1. 查找证书申请

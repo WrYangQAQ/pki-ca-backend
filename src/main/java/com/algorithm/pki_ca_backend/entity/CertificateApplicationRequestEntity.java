@@ -18,8 +18,8 @@ public class CertificateApplicationRequestEntity {
     @JoinColumn(name = "UserID")
     private UserEntity user;
 
-    @Column(nullable = false, columnDefinition = "TEXT")
-    private String publicKey;
+    @Column(name = "LoginPublicKey", nullable = false, columnDefinition = "TEXT")
+    private String loginPublicKey;
 
     @Column(nullable = false)
     private String status;   // PENDING / ISSUED / REJECTED
@@ -28,6 +28,9 @@ public class CertificateApplicationRequestEntity {
     private LocalDateTime requestTime;
 
     private LocalDateTime approveTime;
+
+    @Column(name = "CsrPem", columnDefinition = "nvarchar(max)")
+    private String csrPem;
 
     // ===== 拒绝相关字段 =====
 

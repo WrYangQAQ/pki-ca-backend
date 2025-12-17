@@ -38,4 +38,7 @@ public class CertificateEntity {
 
     @Column(name = "IssueTime")
     private LocalDateTime issueTime;
+
+    @Column(name = "CsrPem", columnDefinition = "nvarchar(max)")
+    private String csrPem;
 }

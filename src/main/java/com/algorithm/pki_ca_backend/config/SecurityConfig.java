@@ -46,7 +46,8 @@ public class SecurityConfig {
                                 "/api/certificates/{certId}/download",                 // 根据证书id下载证书
                                 "/api/certificates/apply-request",                     // 申请证书签发接口(发一个申请请求)
                                 "/api/certificates/{serialNumber}/revoke-request",     // 申请证书吊销接口
-                                "/api/certificates/my"                                 // 查看自己的证书接口
+                                "/api/certificates/my",                                // 查看自己的证书接口
+                                "/api/certificates/csr/challenge"                      // 发送CSR后请求身份校验的Challenge
                         ).hasAnyRole("USER","ADMIN")
 
                         // 证书注册 & 日志，用户信息查询接口 允许管理员访问

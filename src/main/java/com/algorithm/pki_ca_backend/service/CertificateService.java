@@ -1,5 +1,6 @@
 package com.algorithm.pki_ca_backend.service;
 
+import com.algorithm.pki_ca_backend.dto.CsrInfo;
 import com.algorithm.pki_ca_backend.entity.CertificateEntity;
 import com.algorithm.pki_ca_backend.entity.CertificateApplicationRequestEntity;
 import com.algorithm.pki_ca_backend.entity.UserEntity;
@@ -68,30 +69,38 @@ public class CertificateService {
     // 基于证书申请的 CA 签发流程（新方法，ADMIN 专用）
     public CertificateEntity issueCertificateFromRequest(
             CertificateApplicationRequestEntity request,
-            String operatorUsername   // ADMIN 用户名，用于日志
+            String operatorUsername
     ) throws CertificateIssueException {
 
         UserEntity user = request.getUser();
 
-        // 1. 生成唯一序列号
+        // 1. 校验 CSR
+        if (request.getCsrPem() == null || request.getCsrPem().trim().isEmpty()) {
+            throw new CertificateIssueException("证书申请中缺少 CSR，无法签发");
+        }
+
+        // 2. 解析 CSR（PoP 已在 apply 阶段做过，这里主要取公钥和 subject）
+        CsrInfo csrInfo = CertificateUtil.parseAndVerifyCsr(request.getCsrPem());
+
+        // 3. 生成唯一序列号
         String serialNumber = "SN-" + System.currentTimeMillis();
 
-        // 2. 使用 CA 私钥签发证书
+        // 4. 使用 CA 私钥 + CSR 公钥签发证书
         String certPem;
         try {
-            certPem = CertificateUtil.issueX509(
-                    request.getPublicKey(),
+            certPem = CertificateUtil.issueX509FromCsr(
+                    csrInfo.getCsrPublicKey(),
+                    csrInfo.getSubject(),
                     serialNumber
             );
         } catch (CertificateIssueException e) {
-            // 在 Service 层补充业务上下文信息
             throw new CertificateIssueException(
                     "为用户 [" + user.getUsername() + "] 签发证书失败",
                     e
             );
         }
 
-        // 3. 构造证书实体
+        // 5. 保存证书
         CertificateEntity cert = new CertificateEntity();
         cert.setUser(user);
         cert.setSerialNumber(serialNumber);
@@ -103,10 +112,10 @@ public class CertificateService {
 
         CertificateEntity savedCert = certificateRepository.save(cert);
 
-        // 4. 操作日志（真实审计）
+        // 6. 操作日志
         logService.record(
                 operatorUsername,
-                "审批并签发证书",
+                "审批并签发证书(CSR)",
                 serialNumber,
                 "requestId=" + request.getRequestId() + ", user=" + user.getUsername()
         );

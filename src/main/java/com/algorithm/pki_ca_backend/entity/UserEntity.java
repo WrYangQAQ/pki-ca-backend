@@ -23,8 +23,8 @@ public class UserEntity {
     private String email;
 
     // nvarchar(max)
-    @Column(name = "PublicKey", columnDefinition = "nvarchar(max)", nullable = false)
-    private String publicKey;
+    @Column(name = "LoginPublicKey", columnDefinition = "nvarchar(max)", nullable = false)
+    private String loginPublicKey;
 
     @Column(name = "RegisterTime")
     private LocalDateTime registerTime;
