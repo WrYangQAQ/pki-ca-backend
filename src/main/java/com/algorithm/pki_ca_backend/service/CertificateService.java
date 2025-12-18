@@ -30,6 +30,9 @@ public class CertificateService {
     @Autowired
     private CRLRepository CRLRepository;
 
+    @Autowired
+    private MailService mailService;
+
     // 查询所有证书
     public List<CertificateEntity> getAllCertificates() {
         return certificateRepository.findAll();
@@ -112,7 +115,14 @@ public class CertificateService {
 
         CertificateEntity savedCert = certificateRepository.save(cert);
 
-        // 6. 操作日志
+        // 6. 向用户发送申请成功的邮件
+        mailService.sendCertificateIssuedMail(
+                user.getEmail(),
+                user.getUsername(),
+                cert.getSerialNumber()
+        );
+
+        // 7. 操作日志
         logService.record(
                 operatorUsername,
                 "审批并签发证书(CSR)",

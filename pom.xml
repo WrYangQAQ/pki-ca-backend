@@ -82,6 +82,12 @@
 			<version>1.78.1</version>
 		</dependency>
 
+		<!--   Spring Boot Starter Mail   -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-mail</artifactId>
+		</dependency>
+
 		<!-- Spring Boot JPA -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>

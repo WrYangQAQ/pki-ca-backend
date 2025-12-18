@@ -4,11 +4,14 @@ import com.algorithm.pki_ca_backend.dto.RejectRequestDto;
 import com.algorithm.pki_ca_backend.entity.CRLEntity;
 import com.algorithm.pki_ca_backend.entity.CertificateEntity;
 import com.algorithm.pki_ca_backend.entity.CertificateRevocationRequestEntity;
+import com.algorithm.pki_ca_backend.entity.UserEntity;
 import com.algorithm.pki_ca_backend.repository.CRLRepository;
 import com.algorithm.pki_ca_backend.repository.CertificateRepository;
 import com.algorithm.pki_ca_backend.repository.CertificateRevocationRequestRepository;
 import com.algorithm.pki_ca_backend.repository.UserRepository;
 import com.algorithm.pki_ca_backend.dto.ApiResponse;
+import com.algorithm.pki_ca_backend.service.MailService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 
 import java.time.LocalDateTime;
@@ -26,16 +29,20 @@ public class CertificateRevocationRequestController {
     private final UserRepository userRepository;
     private final CRLRepository crlRepository;
 
+    @Autowired
+    private final MailService mailService;
+
     public CertificateRevocationRequestController(
             CertificateRepository certificateRepository,
             CertificateRevocationRequestRepository revocationRequestRepository,
             UserRepository userRepository,
-            CRLRepository crlRepository
+            CRLRepository crlRepository, MailService mailService
     ) {
         this.certificateRepository = certificateRepository;
         this.revocationRequestRepository = revocationRequestRepository;
         this.userRepository = userRepository;
         this.crlRepository = crlRepository;
+        this.mailService = mailService;
     }
 
     // 查询证书吊销请求列表
@@ -78,8 +85,17 @@ public class CertificateRevocationRequestController {
         CRLEntity crl = new CRLEntity();
         crl.setCertificate(cert);
         crl.setRevokeTime(LocalDateTime.now());
-        crl.setReason(req.getReason());   // 可选，但强烈建议
+        crl.setReason(req.getReason());
         crlRepository.save(crl);
+
+        // 4. 向用户发送吊销申请通过邮件
+        UserEntity user = req.getUser();
+        mailService.sendCertificateRevokedMail(
+                user.getEmail(),
+                user.getUsername(),
+                cert.getSerialNumber(),
+                req.getReason()
+        );
 
         return ApiResponse.success("证书已成功吊销");
     }
@@ -116,6 +132,16 @@ public class CertificateRevocationRequestController {
         req.setRejectBy(operator);
 
         revocationRequestRepository.save(req);
+
+        // 向用户发送吊销申请拒绝邮件
+        UserEntity user = req.getUser();
+        CertificateEntity cert = req.getCertificate();
+        mailService.sendCertificateRevocationRejectedMail(
+                user.getEmail(),
+                user.getUsername(),
+                cert.getSerialNumber(),
+                req.getRejectReason()
+        );
 
         return ApiResponse.success("已拒绝该吊销申请");
     }

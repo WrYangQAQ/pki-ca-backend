@@ -18,8 +18,8 @@ public class CertificateApplicationRequestEntity {
     @JoinColumn(name = "UserID")
     private UserEntity user;
 
-    @Column(name = "LoginPublicKey", nullable = false, columnDefinition = "TEXT")
-    private String loginPublicKey;
+//    @Column(name = "LoginPublicKey", nullable = false, columnDefinition = "TEXT")
+//    private String loginPublicKey;
 
     @Column(nullable = false)
     private String status;   // PENDING / ISSUED / REJECTED

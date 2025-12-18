@@ -343,4 +343,6 @@ public class CertificateController{
         String username = authentication.getName();
         return ApiResponse.success(csrChallengeService.generate(username).getChallenge());
     }
+
+
 }

@@ -3,10 +3,12 @@ package com.algorithm.pki_ca_backend.controller;
 import com.algorithm.pki_ca_backend.dto.ApiResponse;
 import com.algorithm.pki_ca_backend.entity.CertificateEntity;
 import com.algorithm.pki_ca_backend.entity.CertificateApplicationRequestEntity;
+import com.algorithm.pki_ca_backend.entity.UserEntity;
 import com.algorithm.pki_ca_backend.exception.CertificateIssueException;
 import com.algorithm.pki_ca_backend.repository.CertificateApplicationRequestRepository;
 import com.algorithm.pki_ca_backend.repository.UserRepository;
 import com.algorithm.pki_ca_backend.service.CertificateService;
+import com.algorithm.pki_ca_backend.service.MailService;
 import com.algorithm.pki_ca_backend.service.OperationLogService;
 import com.algorithm.pki_ca_backend.dto.RejectRequestDto;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -31,6 +33,8 @@ public class CertificateApplicationRequestController{
 
     @Autowired
     private OperationLogService logService;
+    @Autowired
+    private MailService mailService;
 
     // 构造器注入
     public CertificateApplicationRequestController(
@@ -123,6 +127,14 @@ public class CertificateApplicationRequestController{
                 "拒绝签发证书",
                 "CertificateRequest",
                 "requestId=" + req.getRequestId() + ", reason=" + reason
+        );
+
+        // 向用户发送申请拒绝邮件
+        UserEntity user = req.getUser();
+        mailService.sendCertificateIssueRejectedMail(
+                user.getEmail(),
+                user.getUsername(),
+                req.getRejectReason()
         );
 
         return ApiResponse.success("已拒绝该证书申请");
