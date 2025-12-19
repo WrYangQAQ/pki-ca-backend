@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PKI证书管理系统 - 登录</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsrsasign/10.5.25/jsrsasign-all-min.js"></script>
+    <style>
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        
+        .gradient-bg {
+            background: linear-gradient(-45deg, #667eea, #764ba2, #f093fb, #f5576c);
+            background-size: 400% 400%;
+            animation: gradientBG 15s ease infinite;
+        }
+        
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+        }
+        
+        .floating-animation {
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+        
+        .pulse-ring {
+            animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+        }
+        
+        @keyframes pulse-ring {
+            0% { transform: scale(0.8); opacity: 1; }
+            80%, 100% { transform: scale(1.2); opacity: 0; }
+        }
+        
+        .input-focus {
+            transition: all 0.3s ease;
+        }
+        
+        .input-focus:focus {
+            transform: none;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+        
+        .btn-hover {
+            transition: all 0.3s ease;
+        }
+        
+        .btn-hover:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+        }
+        
+        .security-badge {
+            animation: security-pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes security-pulse {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 1; }
+        }
+
+        input, textarea {
+            caret-color: #0f172a;
+        }
+
+        .input-icon-overlay {
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-sky-100 via-sky-200 to-sky-300 min-h-screen flex items-center justify-center p-4">
+
+    <!-- 主容器 -->
+    <div class="relative z-10 w-full max-w-md">
+        <!-- 标志/标题 -->
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-20 h-20 bg-white bg-opacity-30 rounded-full mb-4">
+                <i class="fas fa-shield-alt text-3xl text-blue-700"></i>
+            </div>
+            <h1 class="text-3xl font-bold text-slate-900 mb-2">PKI证书管理系统</h1>
+        </div>
+
+        <!-- 登录卡片 -->
+        <div class="glass-effect rounded-2xl p-8 shadow-2xl">
+            <!-- 安全标识 -->
+            <div class="flex items-center justify-center mb-6">
+                <div class="security-badge bg-sky-100 text-sky-700 px-3 py-1 rounded-full text-sm font-medium">
+                    <i class="fas fa-lock mr-1"></i>
+                    PKI安全认证
+                </div>
+            </div>
+
+            <!-- 登录表单 -->
+            <form id="loginForm" class="space-y-6">
+                <!-- 用户名输入 -->
+                <div>
+                    <label for="username" class="block text-slate-700 text-sm font-medium mb-2">
+                        <i class="fas fa-user mr-2"></i>用户名
+                    </label>
+                    <div class="relative">
+                        <input 
+                            type="text" 
+                            id="username" 
+                            name="username"
+                            class="input-focus w-full px-4 py-3 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400"
+                            placeholder="请输入用户名"
+                            required
+                        >
+                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center input-icon-overlay">
+                            <i class="fas fa-user text-slate-400"></i>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 私钥文件输入 -->
+                <div>
+                    <label for="privateKey" class="block text-slate-700 text-sm font-medium mb-2">
+                        <i class="fas fa-key mr-2"></i>私钥文件
+                    </label>
+                    <div class="relative">
+                        <input 
+                            type="file" 
+                            id="privateKey" 
+                            name="privateKey"
+                            accept=".pem,.key,.txt"
+                            class="hidden"
+                            @change="handleFileSelect"
+                        >
+                        <button 
+                            type="button"
+                            onclick="document.getElementById('privateKey').click()"
+                            class="input-focus w-full px-4 py-3 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 flex items-center justify-between"
+                        >
+                            <span id="fileName" class="text-slate-500">选择私钥文件</span>
+                            <i class="fas fa-upload text-slate-400"></i>
+                        </button>
+                    </div>
+                    <p class="text-slate-600 text-xs mt-2">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        私钥仅用于本地签名，不会被上传或保存
+                    </p>
+                </div>
+
+                <!-- 记住用户名 -->
+                <div class="flex items-center">
+                    <input 
+                        type="checkbox" 
+                        id="rememberMe" 
+                        name="rememberMe"
+                        class="w-4 h-4 text-sky-600 bg-white border border-slate-300 rounded focus:ring-sky-500 focus:ring-2"
+                    >
+                    <label for="rememberMe" class="ml-2 text-slate-700 text-sm">
+                        记住用户名
+                    </label>
+                </div>
+
+                <!-- 登录按钮 -->
+                <button 
+                    type="submit"
+                    id="loginBtn"
+                    class="btn-hover w-full bg-gradient-to-r from-sky-600 to-blue-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    <span id="loginText">
+                        <i class="fas fa-sign-in-alt mr-2"></i>安全登录
+                    </span>
+                    <span id="loginLoading" class="hidden">
+                        <i class="fas fa-spinner fa-spin mr-2"></i>正在登录...
+                    </span>
+                </button>
+            </form>
+
+            <!-- 状态提示 -->
+            <div id="statusMessage" class="mt-4 hidden">
+                <div class="flex items-center p-3 rounded-lg">
+                    <i id="statusIcon" class="fas mr-2 text-slate-600"></i>
+                    <span id="statusText" class="text-slate-800"></span>
+                </div>
+            </div>
+
+            <!-- 登录/注册导航 -->
+            <div class="mt-4 text-center">
+                <p class="text-slate-600 text-sm">
+                    没有账号？
+                    <a href="./register" class="text-sky-700 hover:text-sky-800 font-medium">立即注册</a>
+                </p>
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- JavaScript 脚本 -->
+    <script>
+        class PKILoginManager {
+            constructor() {
+                this.baseURL = './';
+                this.form = document.getElementById('loginForm');
+                this.init();
+            }
+
+            init() {
+                this.loadSavedUsername();
+                this.setupEventListeners();
+                this.setupFileHandler();
+            }
+
+            setupEventListeners() {
+                this.form.addEventListener('submit', (e) => this.handleLogin(e));
+                document.getElementById('username').addEventListener('input', () => this.hideStatus());
+                document.getElementById('privateKey').addEventListener('change', (e) => this.handleFileSelect(e));
+            }
+
+            setupFileHandler() {
+                const fileInput = document.getElementById('privateKey');
+                const fileName = document.getElementById('fileName');
+                
+                fileInput.addEventListener('change', function() {
+                    if (this.files && this.files[0]) {
+                        fileName.textContent = this.files[0].name;
+                        fileName.classList.remove('text-slate-500');
+                        fileName.classList.add('text-slate-800');
+                    } else {
+                        fileName.textContent = '选择私钥文件';
+                        fileName.classList.add('text-slate-500');
+                        fileName.classList.remove('text-slate-800');
+                    }
+                });
+            }
+
+            loadSavedUsername() {
+                const savedUsername = localStorage.getItem('pki_username');
+                if (savedUsername) {
+                    document.getElementById('username').value = savedUsername;
+                    document.getElementById('rememberMe').checked = true;
+                }
+            }
+
+            async handleLogin(event) {
+                event.preventDefault();
+                
+                const username = document.getElementById('username').value.trim();
+                const privateKeyFile = document.getElementById('privateKey').files[0];
+                const rememberMe = document.getElementById('rememberMe').checked;
+
+                if (!username || !privateKeyFile) {
+                    this.showStatus('请填写用户名并选择私钥文件', 'error');
+                    return;
+                }
+
+                if (rememberMe) {
+                    localStorage.setItem('pki_username', username);
+                } else {
+                    localStorage.removeItem('pki_username');
+                }
+
+                this.setLoading(true);
+                this.hideStatus();
+
+                try {
+                    // 步骤1：从服务器获取挑战码（challenge）
+                    const challenge = await this.getChallenge(username);
+                    //const challenge = "522b77825ba04eab966f650da6968e67";
+                    if (!challenge) {
+                        this.setLoading(false);
+                        return;
+                    }
+
+                    // 步骤2：读取并（如需）解密私钥文件
+                    const privateKeyContent = await this.readPrivateKey(privateKeyFile);
+                    if (!privateKeyContent) {
+                        this.setLoading(false);
+                        return;
+                    }
+
+                    // 步骤3：使用私钥对挑战码进行签名
+                    const signature = await this.signChallenge(privateKeyContent, challenge);
+                    if (!signature) {
+                        this.setLoading(false);
+                        return;
+                    }
+                    //alert("challenge:"+challenge+"\nsignature:"+signature);
+                    // 步骤4：发送登录请求进行验签
+                    const jwt = await this.sendLoginRequest(username, challenge, signature);
+                    if (jwt) {
+                        this.handleLoginSuccess(jwt, username);
+                    }
+
+                } catch (error) {
+                    console.error('Login error:', error);
+                    this.showStatus('登录失败：' + (error.message || '未知错误'), 'error');
+                } finally {
+                    this.setLoading(false);
+                }
+            }
+
+            async getChallenge(username) {
+                try {
+                    const response = await fetch(`./api/users/auth/challenge`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ username })
+                    });
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        return data.data;
+                    } else {
+                        this.showStatus(data.message || '获取挑战失败', 'error');
+                        return null;
+                    }
+                } catch (error) {
+                    console.error('Get challenge error:', error);
+                    this.showStatus('连接服务器失败，请检查网络连接', 'error');
+                    return null;
+                }
+            }
+
+            async readPrivateKey(file) {
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        try {
+                            const content = e.target.result;
+                            // Simple validation for PEM format
+                            if (!content.includes('BEGIN') || !content.includes('PRIVATE KEY')) {
+                                this.showStatus('无效的私钥文件格式', 'error');
+                                resolve(null);
+                                return;
+                            }
+                            resolve(content);
+                        } catch (error) {
+                            this.showStatus('读取私钥文件失败', 'error');
+                            resolve(null);
+                        }
+                    };
+                    reader.onerror = () => {
+                        this.showStatus('读取文件失败', 'error');
+                        resolve(null);
+                    };
+                    reader.readAsText(file);
+                });
+            }
+
+            async signChallenge(privateKey, challenge) {
+                try {
+                    const keyObj = KEYUTIL.getKey(privateKey);
+                    const sig = new KJUR.crypto.Signature({ alg: 'SHA256withRSA' });
+                    sig.init(keyObj);
+                    sig.updateString(challenge);
+                    const sigHex = sig.sign();
+                    const sigB64 = hextob64(sigHex);
+                    return sigB64;
+                } catch (error) {
+                    console.error('Sign challenge error:', error);
+                    this.showStatus('签名失败，请检查私钥文件', 'error');
+                    return null;
+                }
+            }
+
+            async sendLoginRequest(username, challenge, signature) {
+                try {
+                    const response = await fetch(`./api/users/auth/login`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            username: username,
+                            challenge: challenge,
+                            signature: signature
+                        })
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        return data.data;
+                    } else {
+                        this.showStatus(data.message || '登录失败', 'error');
+                        return null;
+                    }
+                } catch (error) {
+                    console.error('Login request error:', error);
+                    this.showStatus('登录请求失败，请检查服务器连接', 'error');
+                    return null;
+                }
+            }
+
+            handleLoginSuccess(jwt, username) {
+                // 将 JWT 存入 sessionStorage（出于安全考虑不使用 localStorage）
+                sessionStorage.setItem('pki_jwt', jwt);
+                sessionStorage.setItem('pki_username', username);
+                
+                this.showStatus('登录成功！正在跳转...', 'success');
+                
+                setTimeout(() => {
+                    if (username === 'Alan') {
+                        window.location.href = './admin';
+                    } else {
+                        window.location.href = './apply';
+                    }
+                }, 1500);
+            }
+
+            setLoading(loading) {
+                const loginBtn = document.getElementById('loginBtn');
+                const loginText = document.getElementById('loginText');
+                const loginLoading = document.getElementById('loginLoading');
+                
+                if (loading) {
+                    loginBtn.disabled = true;
+                    loginText.classList.add('hidden');
+                    loginLoading.classList.remove('hidden');
+                } else {
+                    loginBtn.disabled = false;
+                    loginText.classList.remove('hidden');
+                    loginLoading.classList.add('hidden');
+                }
+            }
+
+            showStatus(message, type) {
+                const statusDiv = document.getElementById('statusMessage');
+                const statusIcon = document.getElementById('statusIcon');
+                const statusText = document.getElementById('statusText');
+                
+                statusDiv.classList.remove('hidden');
+                statusDiv.classList.remove('bg-green-500', 'bg-red-500', 'bg-yellow-500');
+                statusIcon.classList.remove('fa-check-circle', 'fa-exclamation-circle', 'fa-info-circle');
+                
+                if (type === 'success') {
+                    statusDiv.classList.add('bg-green-500', 'bg-opacity-20');
+                    statusIcon.classList.add('fa-check-circle');
+                } else if (type === 'error') {
+                    statusDiv.classList.add('bg-red-500', 'bg-opacity-20');
+                    statusIcon.classList.add('fa-exclamation-circle');
+                } else if (type === 'info') {
+                    statusDiv.classList.add('bg-yellow-500', 'bg-opacity-20');
+                    statusIcon.classList.add('fa-info-circle');
+                }
+                
+                statusText.textContent = message;
+            }
+
+            hideStatus() {
+                document.getElementById('statusMessage').classList.add('hidden');
+            }
+
+            handleFileSelect(event) {
+                const file = event.target.files[0];
+                const fileName = document.getElementById('fileName');
+                
+                if (file) {
+                    fileName.textContent = file.name;
+                    fileName.classList.remove('text-slate-500');
+                    fileName.classList.add('text-slate-800');
+                } else {
+                    fileName.textContent = '选择私钥文件';
+                    fileName.classList.add('text-slate-500');
+                    fileName.classList.remove('text-slate-800');
+                }
+            }
+        }
+
+        // 工具函数
+
+        // 页面加载后初始化登录管理器
+        document.addEventListener('DOMContentLoaded', () => {
+            new PKILoginManager();
+        });
+
+        // 演示模式功能
+        // if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+        //     console.log('PKI Login System initialized - Demo mode available');
+        //     console.log('Backend URL: http://localhost:8080');
+        // }
+    </script>
+</body>
+</html>

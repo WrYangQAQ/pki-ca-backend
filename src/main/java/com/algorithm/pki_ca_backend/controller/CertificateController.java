@@ -171,6 +171,7 @@ public class CertificateController{
         data.put("status", status);
         data.put("validFrom", cert.getValidFrom());
         data.put("validTo", cert.getValidTo());
+        data.put("username", cert.getUser().getUsername());
 
         return ApiResponse.success(data);
     }
@@ -305,15 +306,15 @@ public class CertificateController{
     }
 
 
-    // 根据证书id下载证书
-    @GetMapping("/{certId}/download")
+    // 根据证书序列号下载证书
+    @GetMapping("/{serial-number}/download")
     public ResponseEntity<String> downloadCertificate(
-            @PathVariable Integer certId,
+            @PathVariable String serialNumber,
             Authentication authentication
     ) {
 
         CertificateEntity cert =
-                certificateService.getCertificateById(certId);
+                certificateService.getCertificateBySerialNumber(serialNumber);
 
         if (cert == null) {
             return ResponseEntity.notFound().build();
@@ -332,7 +333,7 @@ public class CertificateController{
 
         return ResponseEntity.ok()
                 .header(HttpHeaders.CONTENT_DISPOSITION,
-                        "attachment; filename=certificate-" + certId + ".pem")
+                        "attachment; filename=certificate-" + serialNumber + ".pem")
                 .contentType(MediaType.valueOf("application/x-pem-file"))
                 .body(cert.getCertPEM());
     }

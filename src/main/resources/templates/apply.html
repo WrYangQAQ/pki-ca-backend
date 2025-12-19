@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PKI证书管理系统 - 申请证书</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .glass-effect { background: rgba(255,255,255,0.9); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.6); }
+        .input-focus { transition: all 0.2s ease; }
+        .btn-hover { transition: all 0.2s ease; }
+        .btn-hover:hover { transform: translateY(-1px); }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jsrsasign/10.5.25/jsrsasign-all-min.js"></script>
+</head>
+<body class="bg-gradient-to-br from-sky-100 via-sky-200 to-sky-300 min-h-screen flex items-center justify-center p-4">
+<div class="relative z-10 w-full max-w-7xl">
+    <div class="text-center mb-8">
+        <div class="inline-flex items-center justify-center w-20 h-20 bg-white bg-opacity-30 rounded-full mb-4">
+            <i class="fas fa-award text-3xl text-blue-700"></i>
+        </div>
+        <h1 class="text-3xl font-bold text-slate-900 mb-2">证书管理</h1>
+        <p id="welcomeText" class="text-slate-700"></p>
+    </div>
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div class="glass-effect rounded-2xl p-8 shadow-2xl lg:col-span-3">
+            <div class="flex items-center justify-center mb-6">
+                <div class="bg-sky-100 text-sky-700 px-3 py-1 rounded-full text-sm font-medium">证书申请</div>
+            </div>
+            <div class="space-y-4">
+                <label class="block text-slate-700 text-sm font-medium">通用名（CN）</label>
+                <input id="commonName" type="text" class="input-focus w-full px-4 py-3 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400" placeholder="例如：user.example.com">
+
+                <label class="block text-slate-700 text-sm font-medium">国家（C）</label>
+                <input id="countryCode" type="text" maxlength="2" class="input-focus w-full px-4 py-3 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400" placeholder="例如：CN">
+
+                <label class="block text-slate-700 text-sm font-medium">有效期（天）</label>
+                <input id="validityDays" type="number" min="1" max="1095" class="input-focus w-full px-4 py-3 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400" placeholder="例如：365">
+
+                <label class="block text-slate-700 text-sm font-medium">私钥文件（仅本地使用）</label>
+                <div class="relative">
+                    <input type="file" id="applyPrivateKey" accept=".pem,.key,.txt" class="hidden">
+                    <button type="button" onclick="document.getElementById('applyPrivateKey').click()" class="input-focus w-full px-4 py-3 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 flex items-center justify-between">
+                        <span id="applyPKFileName" class="text-slate-500">选择私钥文件</span>
+                        <i class="fas fa-upload text-slate-400"></i>
+                    </button>
+                </div>
+                <p class="text-slate-600 text-xs">私钥仅用于本地生成CSR与签名，不会被上传。</p>
+
+                <label class="block text-slate-700 text-sm font-medium">公钥文件（仅本地使用）</label>
+                <div class="relative">
+                    <input type="file" id="applyPublicKey" accept=".pem,.key,.txt" class="hidden">
+                    <button type="button" onclick="document.getElementById('applyPublicKey').click()" class="input-focus w-full px-4 py-3 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 flex items-center justify-between">
+                        <span id="applyPubKeyFileName" class="text-slate-500">选择公钥文件</span>
+                        <i class="fas fa-upload text-slate-400"></i>
+                    </button>
+                </div>
+                <p class="text-slate-600 text-xs">公钥用于本地生成CSR，不会被上传。</p>
+
+                <button id="applyBtn" class="btn-hover w-full bg-gradient-to-r from-sky-600 to-blue-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span id="applyText"><i class="fas fa-paper-plane mr-2"></i>立即申请证书</span>
+                    <span id="applyLoading" class="hidden"><i class="fas fa-spinner fa-spin mr-2"></i>正在申请...</span>
+                </button>
+            </div>
+            <div id="applyStatus" class="mt-4 text-slate-700"></div>
+        </div>
+
+        <div class="glass-effect rounded-2xl p-6 shadow-2xl lg:col-span-5 lg:justify-self-center w-full max-w-2xl mx-auto">
+            <div class="flex items-center justify-center mb-4">
+                <div class="bg-sky-100 text-sky-700 px-3 py-1 rounded-full text-sm font-medium">证书列表</div>
+            </div>
+            <div class="flex items-center gap-2 mb-4 justify-center">
+                <input id="searchSerial" type="text" class="input-focus w-full px-4 py-3 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400" placeholder="输入序列号查询特定证书">
+                <button id="searchBtn" class="btn-hover px-6 py-2 bg-sky-600 text-white rounded-lg whitespace-nowrap">搜索</button>
+            </div>
+            <div id="certList" class="space-y-4 min-h-[360px] max-h-[560px] overflow-y-auto"></div>
+        </div>
+
+        <div class="glass-effect rounded-2xl p-8 shadow-2xl lg:col-span-4">
+            <div class="flex items-center justify-center mb-6">
+                <div class="bg-sky-100 text-sky-700 px-3 py-1 rounded-full text-sm font-medium">解析结果</div>
+            </div>
+            <div class="space-y-2 text-slate-800">
+                <div>主体：<span id="parseSubject" class="font-medium"></span></div>
+                <div>颁发者：<span id="parseIssuer" class="font-medium"></span></div>
+                <div>序列号：<span id="parseSerial" class="font-medium"></span></div>
+                <div>有效期起：<span id="parseValidFrom" class="font-medium"></span></div>
+                <div>有效期止：<span id="parseValidTo" class="font-medium"></span></div>
+                <div>签名算法：<span id="parseAlg" class="font-medium"></span></div>
+                <div>状态：<span id="parseStatus" class="font-medium"></span></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="statusMessage" class="mt-6 hidden">
+        <div class="flex items-center p-3 rounded-lg">
+            <i id="statusIcon" class="fas mr-2 text-slate-600"></i>
+            <span id="statusText" class="text-slate-800"></span>
+        </div>
+    </div>
+</div>
+
+<script>
+    class CertificateApplyManager {
+        constructor() {
+            this.baseURL = './';
+            this.jwt = sessionStorage.getItem('pki_jwt');
+            this.username = sessionStorage.getItem('pki_username');
+            this.lastCertId = null;
+            this.myCerts = [];
+            this.myCertsBySerial = new Map();
+            this.init();
+        }
+
+        init() {
+            if (!this.jwt) {
+                window.location.href = './login';
+                return;
+            }
+            const welcome = document.getElementById('welcomeText');
+            if (welcome && this.username) welcome.textContent = `欢迎，${this.username}`;
+            document.getElementById('applyBtn').addEventListener('click', () => this.applyCertificate());
+            document.getElementById('searchBtn').addEventListener('click', () => this.searchBySerial());
+            this.loadMyCertificates();
+        }
+
+        setLoading(loading) {
+            const btn = document.getElementById('applyBtn');
+            const t1 = document.getElementById('applyText');
+            const t2 = document.getElementById('applyLoading');
+            btn.disabled = loading;
+            t1.classList.toggle('hidden', loading);
+            t2.classList.toggle('hidden', !loading);
+        }
+
+        showStatus(message, type) {
+            const statusDiv = document.getElementById('statusMessage');
+            const icon = document.getElementById('statusIcon');
+            const text = document.getElementById('statusText');
+            statusDiv.classList.remove('hidden');
+            icon.classList.remove('fa-check-circle','fa-exclamation-circle','fa-info-circle');
+            if (type === 'success') icon.classList.add('fa-check-circle');
+            else if (type === 'error') icon.classList.add('fa-exclamation-circle');
+            else icon.classList.add('fa-info-circle');
+            text.textContent = message;
+        }
+
+        async applyCertificate() {
+            try {
+                this.setLoading(true);
+                this.showStatus('正在提交申请…', 'info');
+                const cn = document.getElementById('commonName').value.trim();
+                const c = document.getElementById('countryCode').value.trim();
+                const validityDays = parseInt(document.getElementById('validityDays').value, 10);
+                const pkFile = document.getElementById('applyPrivateKey').files[0];
+                const pubFile = document.getElementById('applyPublicKey').files[0];
+
+                if (!cn || !c || !validityDays || validityDays <= 0 || !pkFile || !pubFile) {
+                    this.showStatus('请完整填写并选择私钥、公钥文件', 'error');
+                    return;
+                }
+
+                const privateKeyContent = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.onerror = () => resolve(null);
+                    reader.readAsText(pkFile);
+                });
+                if (!privateKeyContent || !privateKeyContent.includes('PRIVATE KEY')) {
+                    this.showStatus('私钥文件格式不正确', 'error');
+                    return;
+                }
+
+                const publicKeyContent = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.onerror = () => resolve(null);
+                    reader.readAsText(pubFile);
+                });
+                if (!publicKeyContent || !publicKeyContent.includes('PUBLIC KEY')) {
+                    this.showStatus('公钥文件格式不正确', 'error');
+                    return;
+                }
+
+                const csrPEM = await this.generateCSR(publicKeyContent, privateKeyContent, cn, c, this.username || '');
+                if (!csrPEM) {
+                    this.showStatus('生成CSR失败，请检查私钥与输入', 'error');
+                    return;
+                }
+
+                // 获取 CSR Challenge（绑定本次申请）
+                const chResp = await fetch(`./api/certificates/csr/challenge`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${this.jwt}`
+                    }
+                });
+                const chData = await chResp.json();
+                if (!chData || !chData.success || !chData.data) {
+                    this.showStatus((chData && chData.message) || '获取CSR挑战失败', 'error');
+                    return;
+                }
+                const csrChallenge = chData.data;
+
+                // 使用申请私钥对 CSR challenge 进行签名
+                const sig = await this.signChallenge(privateKeyContent, csrChallenge);
+                if (!sig) {
+                    this.showStatus('CSR挑战签名失败', 'error');
+                    return;
+                }
+
+                // 提交 CSR 申请
+                const response = await fetch(`./api/certificates/apply-request`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${this.jwt}`
+                    },
+                    body: JSON.stringify({ csrPem: csrPEM, csrSignature: sig })
+                });
+                const data = await response.json();
+                if (data && data.success) {
+                    const requestId = data.data;
+                    this.showStatus(`申请提交成功！申请ID：${requestId}`, 'success');
+                    const s = document.getElementById('applyStatus');
+                    if (s) s.textContent = `新申请ID：${requestId}`;
+                    await this.loadMyCertificates();
+                } else {
+                    this.showStatus((data && data.message) || '申请失败', 'error');
+                }
+            } catch (err) {
+                this.showStatus('申请请求失败，请检查服务器连接', 'error');
+            } finally {
+                this.setLoading(false);
+            }
+        }
+
+        async signChallenge(privateKeyPEM, message) {
+            try {
+                const keyObj = KEYUTIL.getKey(privateKeyPEM);
+                const sig = new KJUR.crypto.Signature({ alg: 'SHA256withRSA' });
+                sig.init(keyObj);
+                sig.updateString(message);
+                const sigHex = sig.sign();
+                return hextob64(sigHex);
+            } catch (e) {
+                console.error('CSR challenge sign error', e);
+                return null;
+            }
+        }
+
+        async generateCSR(publicKeyPEM, privateKeyPEM, cn, c, email) {
+            try {
+                const prv = KEYUTIL.getKey(privateKeyPEM);
+                const pub = KEYUTIL.getKey(publicKeyPEM);
+                const subjectStr = `/CN=${cn}/C=${c}` + (email ? `/emailAddress=${email}` : '');
+                const signer = new KJUR.crypto.Signature({ alg: 'SHA256withRSA' });
+                signer.init(prv);
+                signer.updateString(subjectStr);
+                const sigHex = signer.sign();
+                const csrPEM = KJUR.asn1.csr.CSRUtil.newCSRPEM({
+                    subject: { str: subjectStr },
+                    sbjpubkey: pub,
+                    sigalg: 'SHA256withRSA',
+                    sighex: sigHex
+                });
+                if (!csrPEM || !csrPEM.includes('BEGIN CERTIFICATE REQUEST') || csrPEM.includes('PRIVATE KEY')) {
+                    return null;
+                }
+                return csrPEM;
+            } catch (e) {
+                console.error('CSR generation error', e);
+                return null;
+            }
+        }
+
+        async loadMyCertificates() {
+            try {
+                const resp = await fetch(`./api/certificates/my`, { headers: { 'Authorization': `Bearer ${this.jwt}` } });
+                const data = await resp.json();
+                if (data && data.success) {
+                    this.myCerts = Array.isArray(data.data) ? data.data : [];
+                    this.myCertsBySerial.clear();
+                    this.myCerts.forEach(c => { if (c.serialNumber) this.myCertsBySerial.set(c.serialNumber, c); });
+                    this.renderList(this.myCerts, true);
+                } else {
+                    this.renderList([], true);
+                }
+            } catch (e) {
+                this.renderList([], true);
+            }
+        }
+
+        renderList(items, ownedDefault) {
+            const listEl = document.getElementById('certList');
+            listEl.innerHTML = '';
+            if (!items || items.length === 0) {
+                listEl.innerHTML = '<div class="text-slate-600 text-sm">暂无证书</div>';
+                return;
+            }
+            items.forEach(item => {
+                const owned = typeof item.owned === 'boolean' ? item.owned : !!ownedDefault;
+                const ownerText = owned ? (this.username || '我') : (item.owner || '未知');
+                const showUser = item.username || ownerText;
+                const row = document.createElement('div');
+                row.className = 'border border-slate-200 rounded-lg p-4 bg-white';
+                row.innerHTML = `
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <div class="text-slate-900 font-semibold text-base">序列号：${item.serialNumber || '-'}</div>
+                                <div class="text-slate-600 text-sm">用户名：${showUser}</div>
+                            </div>
+                            <div class="flex gap-2">
+                                <button class="px-3 py-2 bg-white border border-slate-300 rounded text-slate-900 hover:border-sky-400" data-action="parse">解析</button>
+                                <button class="px-3 py-2 bg-sky-600 text-white rounded ${owned ? '' : 'opacity-50 cursor-not-allowed'}" data-action="download">下载</button>
+                                <button class="px-3 py-2 bg-red-600 text-white rounded ${owned ? '' : 'opacity-50 cursor-not-allowed'}" data-action="revoke">吊销</button>
+                            </div>
+                        </div>`;
+                row.querySelector('[data-action="parse"]').addEventListener('click', () => this.parseCertificate(item));
+                const revokeBtn = row.querySelector('[data-action="revoke"]');
+                if (owned) revokeBtn.addEventListener('click', () => this.revokeCertificate(item));
+                const downloadBtn = row.querySelector('[data-action="download"]');
+                if (owned) {
+                    downloadBtn.addEventListener('click', async () => {
+                        let cid = item.certId;
+                        if (!cid) cid = await this.resolveCertIdBySerial(item.serialNumber);
+                        if (cid) this.downloadCertificateById(cid);
+                        else this.showStatus('无法获取证书ID，无法下载', 'error');
+                    });
+                }
+                listEl.appendChild(row);
+            });
+        }
+
+        async resolveCertIdBySerial(serial) {
+            try {
+                const resp = await fetch(`./api/certificates/${serial}/verify`);
+                const data = await resp.json();
+                if (data && data.success && data.data && data.data.certId) return data.data.certId;
+                if (this.myCertsBySerial.has(serial)) {
+                    const mine = this.myCertsBySerial.get(serial);
+                    if (mine && mine.certId) return mine.certId;
+                }
+                return null;
+            } catch { return null; }
+        }
+
+        async parseCertificate(item) {
+            const serial = item.serialNumber;
+            let status = '';
+            try {
+                const verifyResp = await fetch(`./api/certificates/${serial}/verify`);
+                const verifyData = await verifyResp.json();
+                if (verifyData && verifyData.success) {
+                    status = verifyData.data && verifyData.data.status ? verifyData.data.status : '';
+                    document.getElementById('parseValidFrom').textContent = this.formatCNTime((verifyData.data && verifyData.data.validFrom) || '');
+                    document.getElementById('parseValidTo').textContent = this.formatCNTime((verifyData.data && verifyData.data.validTo) || '');
+                }
+            } catch {}
+            let subject = '', issuer = '', sigAlg = '';
+            // 普通用户的 my 列表通常不含 certId，无法下载 PEM；解析以 verify 信息为主
+            try {
+                if (item.certId) {
+                    const resp = await fetch(`./api/certificates/${item.certId}/download`, { headers: { 'Authorization': `Bearer ${this.jwt}` } });
+                    if (resp.ok) {
+                        const pem = await resp.text();
+                        const x = new X509();
+                        x.readCertPEM(pem);
+                        subject = x.getSubjectString();
+                        issuer = x.getIssuerString();
+                        sigAlg = x.getSignatureAlgorithmName();
+                    }
+                }
+            } catch {}
+            document.getElementById('parseSubject').textContent = subject;
+            document.getElementById('parseIssuer').textContent = issuer;
+            document.getElementById('parseSerial').textContent = serial || '';
+            document.getElementById('parseAlg').textContent = sigAlg;
+            document.getElementById('parseStatus').textContent = status || '';
+        }
+
+        formatCNTime(s) {
+            if (!s) return '';
+            const d = new Date(s);
+            if (isNaN(d.getTime())) return s;
+            const yy = String(d.getFullYear()).slice(-2);
+            const MM = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            const hh = String(d.getHours()).padStart(2, '0');
+            const mm = String(d.getMinutes()).padStart(2, '0');
+            const ss = String(d.getSeconds()).padStart(2, '0');
+            return `${yy}年${MM}月${dd}日：${hh}时${mm}分${ss}秒`;
+        }
+
+        async revokeCertificate(item) {
+            if (!item || !item.serialNumber) return;
+            try {
+                const resp = await fetch(`./api/certificates/${item.serialNumber}/revoke-request`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.jwt}` },
+                    body: JSON.stringify({ reason: 'keyCompromise' })
+                });
+                const data = await resp.json();
+                if (data && data.success) {
+                    this.showStatus('吊销申请已提交', 'success');
+                } else {
+                    this.showStatus((data && data.message) || '吊销申请失败', 'error');
+                }
+            } catch (e) {
+                this.showStatus('吊销申请请求失败', 'error');
+            }
+        }
+
+        async searchBySerial() {
+            const q = document.getElementById('searchSerial').value.trim();
+            if (!q) { this.renderList(this.myCerts, true); return; }
+            try {
+                const resp = await fetch(`./api/certificates/${q}/verify`);
+                const data = await resp.json();
+                if (data && data.success) {
+                    const owned = this.myCertsBySerial.has(q);
+                    const item = { serialNumber: q, owned, username: (data.data && data.data.username) || '' };
+                    if (data.data && data.data.certId) item.certId = data.data.certId;
+                    if (owned) { const mine = this.myCertsBySerial.get(q); item.certId = mine.certId; }
+                    this.renderList([item], owned);
+                } else {
+                    this.renderList([], false);
+                }
+            } catch (e) {
+                this.renderList([], false);
+            }
+        }
+
+        async downloadCertificateById(certId) {
+            try {
+                const resp = await fetch(`./api/certificates/${certId}/download`, {
+                    method: 'GET',
+                    headers: { 'Authorization': `Bearer ${this.jwt}` }
+                });
+                if (!resp.ok) { this.showStatus('下载失败', 'error'); return; }
+                const blob = await resp.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `certificate-${certId}.pem`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                this.showStatus('证书已下载', 'success');
+            } catch (e) {
+                this.showStatus('下载请求失败', 'error');
+            }
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        new CertificateApplyManager();
+        const pkInput = document.getElementById('applyPrivateKey');
+        const nameEl = document.getElementById('applyPKFileName');
+        if (pkInput && nameEl) {
+            pkInput.addEventListener('change', function() {
+                if (this.files && this.files[0]) {
+                    nameEl.textContent = this.files[0].name;
+                    nameEl.classList.remove('text-slate-500');
+                    nameEl.classList.add('text-slate-800');
+                } else {
+                    nameEl.textContent = '选择私钥文件';
+                    nameEl.classList.add('text-slate-500');
+                    nameEl.classList.remove('text-slate-800');
+                }
+            });
+        }
+
+        const pubInput = document.getElementById('applyPublicKey');
+        const pubNameEl = document.getElementById('applyPubKeyFileName');
+        if (pubInput && pubNameEl) {
+            pubInput.addEventListener('change', function() {
+                if (this.files && this.files[0]) {
+                    pubNameEl.textContent = this.files[0].name;
+                    pubNameEl.classList.remove('text-slate-500');
+                    pubNameEl.classList.add('text-slate-800');
+                } else {
+                    pubNameEl.textContent = '选择公钥文件';
+                    pubNameEl.classList.add('text-slate-500');
+                    pubNameEl.classList.remove('text-slate-800');
+                }
+            });
+        }
+    });
+</script>
+</body>
+</html>

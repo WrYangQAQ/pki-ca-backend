@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PKI证书管理系统 - 注册</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* 玻璃态卡片 */
+        .glass-effect {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+        }
+        .input-focus { transition: all 0.2s ease; }
+        .input-focus:focus { box-shadow: 0 8px 16px rgba(0,0,0,0.06); transform: translateY(-1px); }
+        .btn-hover { transition: all 0.2s ease; }
+        .btn-hover:hover { transform: translateY(-1px); }
+    </style>
+    <!-- 简单的蓝色渐变背景，与登录页一致 -->
+</head>
+<body class="bg-gradient-to-br from-sky-100 via-sky-200 to-sky-300 min-h-screen flex items-center justify-center p-4">
+
+    <!-- 主容器 -->
+    <div class="relative z-10 w-full max-w-md">
+        <!-- 标志/标题 -->
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-20 h-20 bg-white bg-opacity-30 rounded-full mb-4">
+                <i class="fas fa-user-plus text-3xl text-blue-700"></i>
+            </div>
+            <h1 class="text-3xl font-bold text-slate-900 mb-2">创建账户</h1>
+            <p class="text-slate-700">加入 PKI 数字证书管理平台</p>
+        </div>
+
+        <!-- 注册卡片 -->
+        <div class="glass-effect rounded-2xl p-8 shadow-2xl">
+            <!-- 注册表单 -->
+            <form id="registerForm" class="space-y-6">
+                <!-- 用户名 -->
+                <div>
+                    <label for="username" class="block text-slate-700 text-sm font-medium mb-2">
+                        <i class="fas fa-user mr-2"></i>用户名
+                    </label>
+                    <div class="relative">
+                        <input type="text" id="username" name="username"
+                               class="input-focus w-full px-4 py-3 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400"
+                               placeholder="3-20位字母、数字或下划线" required>
+                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center">
+                            <i class="fas fa-user text-slate-400"></i>
+                        </div>
+                    </div>
+                    <p id="usernameError" class="hidden mt-2 text-sm text-red-600">用户名格式不正确</p>
+                </div>
+
+                <!-- 邮箱 -->
+                <div>
+                    <label for="email" class="block text-slate-700 text-sm font-medium mb-2">
+                        <i class="fas fa-envelope mr-2"></i>邮箱
+                    </label>
+                    <div class="relative">
+                        <input type="email" id="email" name="email"
+                               class="input-focus w-full px-4 py-3 bg-white border border-slate-300 rounded-lg text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400"
+                               placeholder="请输入邮箱地址" required>
+                        <div class="absolute inset-y-0 right-0 pr-3 flex items-center">
+                            <i class="fas fa-envelope text-slate-400"></i>
+                        </div>
+                    </div>
+                    <p id="emailError" class="hidden mt-2 text-sm text-red-600">邮箱格式不正确</p>
+                </div>
+
+                
+
+                <!-- 公钥文件上传 -->
+                <div>
+                    <label for="publicKey" class="block text-slate-700 text-sm font-medium mb-2">
+                        <i class="fas fa-key mr-2"></i>公钥文件（PEM）
+                    </label>
+                    <div class="relative">
+                        <input type="file" id="publicKey" name="publicKey" accept=".pem,.key,.txt" class="hidden">
+                        <button type="button"
+                                onclick="document.getElementById('publicKey').click()"
+                                class="input-focus w-full px-4 py-3 bg-white border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-400 focus:border-sky-400 flex items-center justify-between">
+                            <span id="publicKeyName" class="text-slate-500">选择公钥文件</span>
+                            <i class="fas fa-upload text-slate-400"></i>
+                        </button>
+                    </div>
+                    <p id="publicKeyError" class="hidden mt-2 text-sm text-red-600">文件格式不正确，需包含 BEGIN 公钥标识</p>
+                </div>
+
+
+                <!-- 注册按钮 -->
+                <button type="submit" id="registerBtn"
+                        class="btn-hover w-full bg-gradient-to-r from-sky-600 to-blue-700 text-white font-bold py-3 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-white focus:ring-opacity-50 disabled:opacity-50 disabled:cursor-not-allowed">
+                    <span id="registerText"><i class="fas fa-user-check mr-2"></i>立即注册</span>
+                    <span id="registerLoading" class="hidden"><i class="fas fa-spinner fa-spin mr-2"></i>正在提交...</span>
+                </button>
+            </form>
+
+            <!-- 状态提示 -->
+            <div id="statusMessage" class="mt-4 hidden">
+                <div class="flex items-center p-3 rounded-lg">
+                    <i id="statusIcon" class="fas mr-2 text-slate-600"></i>
+                    <span id="statusText" class="text-slate-800"></span>
+                </div>
+            </div>
+
+            <!-- 已有账户导航 -->
+            <div class="mt-4 text-center">
+                <p class="text-slate-600 text-sm">已有账号？
+                    <a href="./index" class="text-sky-700 hover:text-sky-800 font-medium">立即登录</a>
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript 脚本 -->
+    <script>
+
+        // 文件名显示
+        document.getElementById('publicKey').addEventListener('change', function () {
+            const nameEl = document.getElementById('publicKeyName');
+            if (this.files && this.files[0]) {
+                nameEl.textContent = this.files[0].name;
+                nameEl.classList.remove('text-slate-500');
+                nameEl.classList.add('text-slate-800');
+            } else {
+                nameEl.textContent = '选择公钥文件';
+                nameEl.classList.add('text-slate-500');
+                nameEl.classList.remove('text-slate-800');
+            }
+        });
+
+        // 简单校验函数
+        function showError(id, show, msg) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            if (msg) el.textContent = msg;
+            el.classList.toggle('hidden', !show);
+        }
+
+        function setLoading(loading) {
+            const btn = document.getElementById('registerBtn');
+            const t1 = document.getElementById('registerText');
+            const t2 = document.getElementById('registerLoading');
+            btn.disabled = loading;
+            t1.classList.toggle('hidden', loading);
+            t2.classList.toggle('hidden', !loading);
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('statusMessage');
+            const icon = document.getElementById('statusIcon');
+            const text = document.getElementById('statusText');
+            statusDiv.classList.remove('hidden');
+            icon.classList.remove('fa-check-circle','fa-exclamation-circle','fa-info-circle');
+            if (type === 'success') icon.classList.add('fa-check-circle');
+            else if (type === 'error') icon.classList.add('fa-exclamation-circle');
+            else icon.classList.add('fa-info-circle');
+            text.textContent = message;
+        }
+
+        // 表单提交（纯前端校验，成功后跳转登录页）
+        document.getElementById('registerForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            // 取值
+            const username = document.getElementById('username').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const publicKeyFile = document.getElementById('publicKey').files[0];
+
+            // 校验规则
+            const userValid = /^[A-Za-z0-9_]{3,20}$/.test(username);
+            const emailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+            let pemValid = false;
+
+            // 公钥校验（读取文本，简单检查是否包含 BEGIN）
+            const reader = new FileReader();
+            reader.onload = () => {
+                const content = reader.result || '';
+                pemValid = typeof content === 'string' && content.includes('BEGIN') && content.includes('PUBLIC KEY');
+
+                // 显示错误
+                showError('usernameError', !userValid, '用户名格式不正确');
+                showError('emailError', !emailValid, '邮箱格式不正确');
+                showError('publicKeyError', !pemValid, '文件格式不正确，需包含 BEGIN 公钥标识');
+
+                if (!userValid || !emailValid || !pemValid) {
+                    showStatus('请按要求填写完整信息', 'error');
+                    return;
+                }
+
+                // 调用后端注册接口
+                (async () => {
+                    try {
+                        setLoading(true);
+                        showStatus('正在提交注册信息…', 'info');
+                        const response = await fetch('./api/users/register', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                username,
+                                email,
+                                loginPublicKey: content,
+                                role: 'ROLE_USER'
+                            })
+                        });
+                        const data = await response.json();
+                        if (data && data.success) {
+                            showStatus('注册成功！即将跳转到登录页', 'success');
+                            setTimeout(() => { window.location.href = './index'; }, 1500);
+                        } else {
+                            showStatus((data && data.message) || '注册失败', 'error');
+                        }
+                    } catch (err) {
+                        showStatus('注册请求失败，请检查服务器连接', 'error');
+                    } finally {
+                        setLoading(false);
+                    }
+                })();
+            };
+
+            if (publicKeyFile) reader.readAsText(publicKeyFile);
+            else {
+                showError('publicKeyError', true, '请选择公钥文件');
+                showStatus('请上传公钥文件', 'error');
+            }
+        });
+    </script>
+</body>
+</html>
