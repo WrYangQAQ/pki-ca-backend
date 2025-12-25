@@ -49,4 +49,5 @@ public class CertificateRevocationRequestEntity {
 
     @Column(name = "RejectBy", length = 100)
     private String rejectBy;
+
 }

@@ -47,11 +47,11 @@ public class SecurityConfig {
 
                         // 证书查询，下载接口 允许登录用户访问
                         .requestMatchers(
-                                "/api/certificates/{certId}/download",                 // 根据证书id下载证书
+                                "/api/certificates/{serialNumber}/download",          // 根据证书id下载证书
                                 "/api/certificates/apply-request",                     // 申请证书签发接口(发一个申请请求)
                                 "/api/certificates/{serialNumber}/revoke-request",     // 申请证书吊销接口
                                 "/api/certificates/my",                                // 查看自己的证书接口
-                                "/api/certificates/csr/challenge",                      // 发送CSR后请求身份校验的Challenge
+                                "/api/certificates/csr/challenge",                     // 发送CSR后请求身份校验的Challenge
                                 "/apply"
                         ).hasAnyRole("USER","ADMIN")
 
@@ -67,7 +67,7 @@ public class SecurityConfig {
                                 "/api/certificates/apply-requests/{id}/reject",     // 管理员拒绝申请请求
                                 "/api/certificates/revoke-requests",                // 管理员查询证书吊销请求列表
                                 "/api/certificates/revoke-requests/{id}/approve",   // 管理员通过吊销申请
-                                "/api/certificates/revoke-requests/{id}/reject",     // 管理员拒绝吊销申请
+                                "/api/certificates/revoke-requests/{id}/reject",    // 管理员拒绝吊销申请
                                 "/admin"
                         ).hasRole("ADMIN")
 

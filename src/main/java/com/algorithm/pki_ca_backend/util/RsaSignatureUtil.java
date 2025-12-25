@@ -29,6 +29,7 @@ public class RsaSignatureUtil {
         return KeyFactory.getInstance("RSA").generatePublic(spec);
     }
 
+    // 调用RSA验签方法
     public static boolean verifySha256WithRsa(PublicKey publicKey, String message, String signatureBase64)
             throws Exception {
 
@@ -40,6 +41,7 @@ public class RsaSignatureUtil {
     }
 
 
+    // 调用 SHA256 对输入字符串进行哈希值计算
     public static String sha256Hex(String input) throws Exception {
         MessageDigest md = MessageDigest.getInstance("SHA-256");
         byte[] hash = md.digest(input.getBytes(StandardCharsets.UTF_8));

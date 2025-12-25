@@ -82,7 +82,9 @@
                 <div class="bg-sky-100 text-sky-700 px-3 py-1 rounded-full text-sm font-medium">解析结果</div>
             </div>
             <div class="space-y-2 text-slate-800">
-                <div>主体：<span id="parseSubject" class="font-medium"></span></div>
+                <div>签发对象：<span id="parseSubjectCN" class="font-medium"></span></div>
+                <div>地区：<span id="parseRegion" class="font-medium"></span></div>
+                <div>申请用户：<span id="parseEmail" class="font-medium"></span></div>
                 <div>颁发者：<span id="parseIssuer" class="font-medium"></span></div>
                 <div>序列号：<span id="parseSerial" class="font-medium"></span></div>
                 <div>有效期起：<span id="parseValidFrom" class="font-medium"></span></div>
@@ -97,6 +99,27 @@
         <div class="flex items-center p-3 rounded-lg">
             <i id="statusIcon" class="fas mr-2 text-slate-600"></i>
             <span id="statusText" class="text-slate-800"></span>
+        </div>
+    </div>
+
+    <!-- Revoke Reason Modal -->
+    <div id="revokeModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+        <div class="relative p-5 border w-96 shadow-lg rounded-md bg-white">
+            <div class="mt-3 text-center">
+                <h3 class="text-lg leading-6 font-medium text-gray-900">申请吊销证书</h3>
+                <div class="mt-2 px-2 py-3">
+                    <p class="text-sm text-gray-500 mb-2 text-left">请输入吊销原因：</p>
+                    <input id="revokeReason" type="text" class="input-focus w-full px-3 py-2 border border-slate-300 rounded-lg text-slate-900 focus:outline-none focus:ring-2 focus:ring-sky-400" placeholder="例如：私钥泄露 / 不再使用">
+                </div>
+                <div class="items-center px-2 py-3">
+                    <button id="confirmRevokeBtn" class="px-4 py-2 bg-red-600 text-white text-base font-medium rounded-md w-full shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-300">
+                        提交申请
+                    </button>
+                    <button id="cancelRevokeBtn" class="mt-3 px-4 py-2 bg-white text-slate-700 text-base font-medium rounded-md w-full shadow-sm border border-slate-300 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-200">
+                        取消
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 </div>
@@ -122,6 +145,8 @@
             if (welcome && this.username) welcome.textContent = `欢迎，${this.username}`;
             document.getElementById('applyBtn').addEventListener('click', () => this.applyCertificate());
             document.getElementById('searchBtn').addEventListener('click', () => this.searchBySerial());
+            document.getElementById('confirmRevokeBtn').addEventListener('click', () => this.confirmRevoke());
+            document.getElementById('cancelRevokeBtn').addEventListener('click', () => this.closeRevokeModal());
             this.loadMyCertificates();
         }
 
@@ -280,7 +305,14 @@
                 const resp = await fetch(`./api/certificates/my`, { headers: { 'Authorization': `Bearer ${this.jwt}` } });
                 const data = await resp.json();
                 if (data && data.success) {
-                    this.myCerts = Array.isArray(data.data) ? data.data : [];
+                    let list = Array.isArray(data.data) ? data.data : [];
+                    // 兼容后端可能返回的不同 ID 字段名
+                    list = list.map(item => {
+                        if (!item.certId && item.id) item.certId = item.id;
+                        if (!item.certId && item.CertID) item.certId = item.CertID;
+                        return item;
+                    });
+                    this.myCerts = list;
                     this.myCertsBySerial.clear();
                     this.myCerts.forEach(c => { if (c.serialNumber) this.myCertsBySerial.set(c.serialNumber, c); });
                     this.renderList(this.myCerts, true);
@@ -322,28 +354,13 @@
                 if (owned) revokeBtn.addEventListener('click', () => this.revokeCertificate(item));
                 const downloadBtn = row.querySelector('[data-action="download"]');
                 if (owned) {
-                    downloadBtn.addEventListener('click', async () => {
-                        let cid = item.certId;
-                        if (!cid) cid = await this.resolveCertIdBySerial(item.serialNumber);
-                        if (cid) this.downloadCertificateById(cid);
-                        else this.showStatus('无法获取证书ID，无法下载', 'error');
-                    });
+                     downloadBtn.addEventListener('click', () => {
+                        if (item.serialNumber) this.downloadCertificateBySerial(item.serialNumber);
+                        else this.showStatus('无法获取证书序列号，无法下载', 'error');
+                     });
                 }
                 listEl.appendChild(row);
             });
-        }
-
-        async resolveCertIdBySerial(serial) {
-            try {
-                const resp = await fetch(`./api/certificates/${serial}/verify`);
-                const data = await resp.json();
-                if (data && data.success && data.data && data.data.certId) return data.data.certId;
-                if (this.myCertsBySerial.has(serial)) {
-                    const mine = this.myCertsBySerial.get(serial);
-                    if (mine && mine.certId) return mine.certId;
-                }
-                return null;
-            } catch { return null; }
         }
 
         async parseCertificate(item) {
@@ -358,26 +375,47 @@
                     document.getElementById('parseValidTo').textContent = this.formatCNTime((verifyData.data && verifyData.data.validTo) || '');
                 }
             } catch {}
-            let subject = '', issuer = '', sigAlg = '';
-            // 普通用户的 my 列表通常不含 certId，无法下载 PEM；解析以 verify 信息为主
+            let subjectCN = '', region = '', email = '', issuer = '', sigAlg = '';
             try {
-                if (item.certId) {
-                    const resp = await fetch(`./api/certificates/${item.certId}/download`, { headers: { 'Authorization': `Bearer ${this.jwt}` } });
+                if (serial) {
+                    const resp = await fetch(`./api/certificates/${serial}/download`, { headers: { 'Authorization': `Bearer ${this.jwt}` } });
                     if (resp.ok) {
                         const pem = await resp.text();
                         const x = new X509();
                         x.readCertPEM(pem);
-                        subject = x.getSubjectString();
-                        issuer = x.getIssuerString();
+                        
+                        // Parse Subject
+                        const subjStr = x.getSubjectString(); // e.g., /C=CN/CN=User/emailAddress=...
+                        subjectCN = this.extractDNPart(subjStr, 'CN');
+                        region = this.extractDNPart(subjStr, 'C');
+                        email = this.extractDNPart(subjStr, 'emailAddress') || this.extractDNPart(subjStr, 'E');
+
+                        // Parse Issuer (only CN)
+                        const issuerStr = x.getIssuerString();
+                        issuer = this.extractDNPart(issuerStr, 'CN');
+
                         sigAlg = x.getSignatureAlgorithmName();
                     }
                 }
             } catch {}
-            document.getElementById('parseSubject').textContent = subject;
+            document.getElementById('parseSubjectCN').textContent = subjectCN;
+            document.getElementById('parseRegion').textContent = region;
+            document.getElementById('parseEmail').textContent = email;
             document.getElementById('parseIssuer').textContent = issuer;
             document.getElementById('parseSerial').textContent = serial || '';
             document.getElementById('parseAlg').textContent = sigAlg;
             document.getElementById('parseStatus').textContent = status || '';
+        }
+
+        extractDNPart(dnStr, type) {
+            if (!dnStr) return '';
+            // jsrsasign returns DN like /Type=Value/Type=Value
+            const parts = dnStr.split('/');
+            for (const part of parts) {
+                const [k, v] = part.split('=');
+                if (k === type) return v;
+            }
+            return '';
         }
 
         formatCNTime(s) {
@@ -393,21 +431,40 @@
             return `${yy}年${MM}月${dd}日：${hh}时${mm}分${ss}秒`;
         }
 
-        async revokeCertificate(item) {
+        revokeCertificate(item) {
             if (!item || !item.serialNumber) return;
+            this.revokingSerial = item.serialNumber;
+            document.getElementById('revokeReason').value = '';
+            document.getElementById('revokeModal').classList.remove('hidden');
+        }
+
+        closeRevokeModal() {
+            document.getElementById('revokeModal').classList.add('hidden');
+            this.revokingSerial = null;
+        }
+
+        async confirmRevoke() {
+            if (!this.revokingSerial) return;
+            const reason = document.getElementById('revokeReason').value.trim();
+            if (!reason) {
+                alert('请填写吊销原因');
+                return;
+            }
             try {
-                const resp = await fetch(`./api/certificates/${item.serialNumber}/revoke-request`, {
+                const resp = await fetch(`./api/certificates/${this.revokingSerial}/revoke-request`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${this.jwt}` },
-                    body: JSON.stringify({ reason: 'keyCompromise' })
+                    body: JSON.stringify({ reason: reason })
                 });
                 const data = await resp.json();
+                this.closeRevokeModal();
                 if (data && data.success) {
                     this.showStatus('吊销申请已提交', 'success');
                 } else {
                     this.showStatus((data && data.message) || '吊销申请失败', 'error');
                 }
             } catch (e) {
+                this.closeRevokeModal();
                 this.showStatus('吊销申请请求失败', 'error');
             }
         }
@@ -421,8 +478,6 @@
                 if (data && data.success) {
                     const owned = this.myCertsBySerial.has(q);
                     const item = { serialNumber: q, owned, username: (data.data && data.data.username) || '' };
-                    if (data.data && data.data.certId) item.certId = data.data.certId;
-                    if (owned) { const mine = this.myCertsBySerial.get(q); item.certId = mine.certId; }
                     this.renderList([item], owned);
                 } else {
                     this.renderList([], false);
@@ -432,9 +487,9 @@
             }
         }
 
-        async downloadCertificateById(certId) {
+        async downloadCertificateBySerial(serial) {
             try {
-                const resp = await fetch(`./api/certificates/${certId}/download`, {
+                const resp = await fetch(`./api/certificates/${serial}/download`, {
                     method: 'GET',
                     headers: { 'Authorization': `Bearer ${this.jwt}` }
                 });
@@ -443,7 +498,7 @@
                 const url = window.URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `certificate-${certId}.pem`;
+                a.download = `certificate-${serial}.pem`;
                 document.body.appendChild(a);
                 a.click();
                 a.remove();

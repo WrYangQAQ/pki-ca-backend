@@ -229,6 +229,7 @@ public class CertificateUtil {
     }
 
 
+    // 加载根证书
     private static X509Certificate loadCaCertificate() throws Exception {
         InputStream is = CertificateUtil.class
                 .getClassLoader()
@@ -244,20 +245,21 @@ public class CertificateUtil {
         }
     }
 
+    // 解析PEM格式公钥
     private static PublicKey parsePublicKey(String pem) throws Exception {
         String content = pem
                 .replace("-----BEGIN PUBLIC KEY-----", "")
                 .replace("-----END PUBLIC KEY-----", "")
                 .replaceAll("\\s", "");
 
-        byte[] decoded = Base64.getDecoder().decode(content);
+        byte[] decoded = java.util.Base64.getDecoder().decode(content);
         X509EncodedKeySpec spec = new X509EncodedKeySpec(decoded);
 
         return KeyFactory.getInstance("RSA").generatePublic(spec);
     }
 
-    // 解析收到的CSR PEM，并利用解析出来的信息进行验证
-    public static CsrInfo parseAndVerifyCsr(String csrPem) throws CertificateIssueException {
+    // 解析收到的CSR PEM
+    public static CsrInfo parseCsrAndExtractPublicKey(String csrPem) throws CertificateIssueException {
         try (PEMParser parser = new PEMParser(new StringReader(csrPem))) {
 
             Object obj = parser.readObject();
@@ -269,20 +271,11 @@ public class CertificateUtil {
             PublicKey csrPublicKey = jcaCsr.getPublicKey();
             X500Name subject = csr.getSubject();
 
-            boolean ok = csr.isSignatureValid(
-                    new JcaContentVerifierProviderBuilder()
-                            .setProvider("BC")
-                            .build(csrPublicKey)
-            );
-            if (!ok) {
-                throw new CertificateIssueException("CSR 自签名验证失败");
-            }
+            //System.out.println("publicKey:" + publicKeyToPEM(csrPublicKey));
 
             return new CsrInfo(subject, csrPublicKey);
 
-        } catch (CertificateIssueException e) {
-            throw e;
-        } catch (Exception e) {
+        }  catch (Exception e) {
             throw new CertificateIssueException("解析/验证 CSR 失败：" + e.getMessage(), e);
         }
     }
@@ -295,7 +288,7 @@ public class CertificateUtil {
     ) throws CertificateIssueException {
 
         try {
-            byte[] sigBytes = Base64.getDecoder().decode(signatureBase64);
+            byte[] sigBytes = java.util.Base64.getDecoder().decode(signatureBase64);
 
             Signature sig = Signature.getInstance("SHA256withRSA");
             sig.initVerify(csrPublicKey);
@@ -312,4 +305,49 @@ public class CertificateUtil {
         }
     }
 
+
+    // 将公钥转换为 Base64 编码字符串
+    // @param publicKey 公钥对象
+    // @return Base64 编码的字符串
+    public static String publicKeyToBase64(PublicKey publicKey) {
+        byte[] encoded = publicKey.getEncoded();  // X.509 格式编码
+        return java.util.Base64.getEncoder().encodeToString(encoded);
+    }
+
+
+    // 将公钥转换为 PEM 格式字符串
+    // @param publicKey 公钥对象
+    // @return PEM 格式字符串
+    public static String publicKeyToPEM(PublicKey publicKey) {
+        String base64 = publicKeyToBase64(publicKey);
+        StringBuilder pem = new StringBuilder();
+
+        if (publicKey.getAlgorithm().equalsIgnoreCase("RSA")) {
+            pem.append("-----BEGIN RSA PUBLIC KEY-----\n");
+        } else if (publicKey.getAlgorithm().equalsIgnoreCase("EC")) {
+            pem.append("-----BEGIN EC PUBLIC KEY-----\n");
+        } else if (publicKey.getAlgorithm().equalsIgnoreCase("DSA")) {
+            pem.append("-----BEGIN DSA PUBLIC KEY-----\n");
+        } else {
+            pem.append("-----BEGIN PUBLIC KEY-----\n");
+        }
+
+        // 每64个字符换行（PEM格式标准）
+        for (int i = 0; i < base64.length(); i += 64) {
+            int end = Math.min(base64.length(), i + 64);
+            pem.append(base64.substring(i, end)).append("\n");
+        }
+
+        if (publicKey.getAlgorithm().equalsIgnoreCase("RSA")) {
+            pem.append("-----END RSA PUBLIC KEY-----");
+        } else if (publicKey.getAlgorithm().equalsIgnoreCase("EC")) {
+            pem.append("-----END EC PUBLIC KEY-----");
+        } else if (publicKey.getAlgorithm().equalsIgnoreCase("DSA")) {
+            pem.append("-----END DSA PUBLIC KEY-----");
+        } else {
+            pem.append("-----END PUBLIC KEY-----");
+        }
+
+        return pem.toString();
+    }
 }

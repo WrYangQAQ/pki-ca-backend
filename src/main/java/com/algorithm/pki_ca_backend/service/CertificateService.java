@@ -83,7 +83,7 @@ public class CertificateService {
         }
 
         // 2. 解析 CSR（PoP 已在 apply 阶段做过，这里主要取公钥和 subject）
-        CsrInfo csrInfo = CertificateUtil.parseAndVerifyCsr(request.getCsrPem());
+        CsrInfo csrInfo = CertificateUtil.parseCsrAndExtractPublicKey(request.getCsrPem());
 
         // 3. 生成唯一序列号
         String serialNumber = "SN-" + System.currentTimeMillis();

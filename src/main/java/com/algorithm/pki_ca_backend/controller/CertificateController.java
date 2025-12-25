@@ -197,6 +197,7 @@ public class CertificateController{
             return ApiResponse.fail("csrSignature 不能为空");
         }
 
+
         String username = authentication.getName();
         Optional<UserEntity> userOpt = userRepository.findByUsername(username);
 
@@ -213,8 +214,10 @@ public class CertificateController{
             return ApiResponse.fail("CSR challenge 无效或已过期");
         }
 
+        //System.out.println("csrSignature:" + body.getCsrSignature().toString());
+
         try {
-            CsrInfo csrInfo = CertificateUtil.parseAndVerifyCsr(body.getCsrPem());
+            CsrInfo csrInfo = CertificateUtil.parseCsrAndExtractPublicKey(body.getCsrPem());
             CertificateUtil.verifyCsrBinding(csrInfo.getCsrPublicKey(),
                                              csrBindChallenge.getChallenge(),
                                              body.getCsrSignature()
@@ -307,7 +310,7 @@ public class CertificateController{
 
 
     // 根据证书序列号下载证书
-    @GetMapping("/{serial-number}/download")
+    @GetMapping("/{serialNumber}/download")
     public ResponseEntity<String> downloadCertificate(
             @PathVariable String serialNumber,
             Authentication authentication

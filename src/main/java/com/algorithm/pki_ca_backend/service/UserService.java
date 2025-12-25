@@ -29,6 +29,7 @@ public class UserService {
         return userRepository.existsByUsername(username);
     }
 
+    // 用户注册业务逻辑实现
     public UserEntity registerUser(UserEntity user) {
         if (userRepository.existsByUsername(user.getUsername())) {
             return null;

@@ -5,7 +5,7 @@
          https://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 
-	<!-- ✅ 添加 Spring Boot 父项目 -->
+	<!-- 添加 Spring Boot 父项目 -->
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
@@ -23,7 +23,7 @@
 		<java.version>17</java.version>
 	</properties>
 
-	<!-- ✅ Maven 仓库源（包含微软和阿里云） -->
+	<!-- Maven 仓库源（包含微软和阿里云） -->
 	<repositories>
 		<repository>
 			<id>microsoft</id>
@@ -37,7 +37,7 @@
 		</repository>
 	</repositories>
 
-	<!-- ✅ 所有依赖 -->
+	<!-- 所有依赖 -->
 	<dependencies>
 		<!-- Spring Boot Web -->
 		<dependency>
@@ -112,6 +112,12 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-thymeleaf</artifactId>
+		</dependency>
+
+		<!-- Redis依赖 -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-redis</artifactId>
 		</dependency>
 
 		<!-- 测试 -->

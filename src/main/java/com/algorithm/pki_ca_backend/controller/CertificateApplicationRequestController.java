@@ -51,6 +51,7 @@ public class CertificateApplicationRequestController{
         return ApiResponse.success(applyRequestRepository.findByStatus("PENDING"));
     }
 
+
     // 同意请求，完成对请求中CSR的证书签发
     @PostMapping("/apply-requests/{id}/approve")
     public ApiResponse<Long> approveRequest(@PathVariable Long id, Authentication authentication){

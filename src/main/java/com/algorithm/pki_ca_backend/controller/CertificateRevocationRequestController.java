@@ -73,7 +73,7 @@ public class CertificateRevocationRequestController {
 
         // 1. 调用 CRL / 证书吊销逻辑（真正吊销）
         CertificateEntity cert = req.getCertificate();
-        cert.setStatus("吊销");          // 如果你已有统一方法，也可以放 Service
+        cert.setStatus("吊销");
         certificateRepository.save(cert);
 
         // 2. 更新吊销申请状态
