@@ -12,11 +12,8 @@ import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
-import org.bouncycastle.openssl.PEMKeyPair;
 import org.bouncycastle.openssl.PEMParser;
-import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter;
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
-import org.bouncycastle.operator.jcajce.JcaContentVerifierProviderBuilder;
 import org.bouncycastle.pkcs.PKCS10CertificationRequest;
 import org.bouncycastle.pkcs.jcajce.JcaPKCS10CertificationRequest;
 
@@ -24,11 +21,11 @@ import java.io.*;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
+import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.security.spec.X509EncodedKeySpec;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Base64;
 import java.util.Date;
 
 public class CertificateUtil {
@@ -126,8 +123,11 @@ public class CertificateUtil {
             String serialNumber
     ) throws CertificateIssueException {
 
+        System.out.println("[DEBUG] issueX509FromCsr() ENTER");
+
         try {
             PrivateKey caPrivateKey = loadCaPrivateKey();
+
             X509Certificate caCert = loadCaCertificate();
 
             X500Name issuer = new X500Name(caCert.getSubjectX500Principal().getName());
@@ -155,11 +155,13 @@ public class CertificateUtil {
                     true,
                     new BasicConstraints(false)
             );
+
             builder.addExtension(
                     Extension.keyUsage,
                     true,
                     new KeyUsage(KeyUsage.digitalSignature | KeyUsage.keyEncipherment)
             );
+
             builder.addExtension(
                     Extension.subjectKeyIdentifier,
                     false,
@@ -181,6 +183,8 @@ public class CertificateUtil {
             try (JcaPEMWriter pw = new JcaPEMWriter(sw)) {
                 pw.writeObject(cert);
             }
+
+
             return sw.toString();
 
         } catch (Exception e) {
@@ -191,59 +195,57 @@ public class CertificateUtil {
 
     // ===== 工具方法 =====
 
-    // 加载CA私钥
+    // 从 KeyStore 加载 CA 私钥
     private static PrivateKey loadCaPrivateKey() throws CertificateIssueException {
+        try {
+            String keystorePassword = System.getenv("CA_KEYSTORE_PASSWORD");
+            String keyAlias = System.getenv("CA_KEY_ALIAS");
 
-        InputStream is = CertificateUtil.class
-                .getClassLoader()
-                .getResourceAsStream("ca/ca.key.pem");
-
-        if (is == null) {
-            throw new CertificateIssueException("CA 私钥文件 ca.key.pem 未找到");
-        }
-
-        try (PEMParser parser = new PEMParser(new InputStreamReader(is))) {
-
-            Object obj = parser.readObject();
-            JcaPEMKeyConverter converter =
-                    new JcaPEMKeyConverter().setProvider("BC");
-
-            // PKCS#1：BEGIN RSA PRIVATE KEY
-            if (obj instanceof PEMKeyPair keyPair) {
-                return converter.getKeyPair(keyPair).getPrivate();
+            if (keyAlias == null || keystorePassword == null) {
+                throw new CertificateIssueException("CA KeyStore 环境变量未配置");
             }
 
-            // PKCS#8：BEGIN PRIVATE KEY
-            if (obj instanceof org.bouncycastle.asn1.pkcs.PrivateKeyInfo keyInfo) {
-                return converter.getPrivateKey(keyInfo);
+            KeyStore keyStore = loadCaKeyStore();
+
+            Key key = keyStore.getKey(keyAlias, keystorePassword.toCharArray());
+            if (!(key instanceof PrivateKey)) {
+                throw new CertificateIssueException("KeyStore 中未找到 CA 私钥");
             }
 
-            throw new CertificateIssueException("不支持的 CA 私钥格式：" + obj.getClass().getName());
-        } catch (CertificateIssueException e){
-            // 业务异常，直接向上抛
+            return (PrivateKey) key;
+
+        } catch (CertificateIssueException e) {
             throw e;
         } catch (Exception e) {
-            // IO / PEM 解析异常，统一包装
             throw new CertificateIssueException("加载 CA 私钥失败：" + e.getMessage(), e);
         }
     }
 
 
-    // 加载根证书
-    private static X509Certificate loadCaCertificate() throws Exception {
-        InputStream is = CertificateUtil.class
-                .getClassLoader()
-                .getResourceAsStream("ca/ca.cert.pem");
+    // 从 KeyStore 加载根证书
+    private static X509Certificate loadCaCertificate() throws CertificateIssueException {
+        try {
+            String keyAlias = System.getenv("CA_KEY_ALIAS");
+            if (keyAlias == null) {
+                throw new CertificateIssueException("CA KeyStore 别名未配置");
+            }
 
-        try (PEMParser parser = new PEMParser(new InputStreamReader(is))) {
-            X509CertificateHolder holder =
-                    (X509CertificateHolder) parser.readObject();
+            KeyStore keyStore = loadCaKeyStore();
+            Certificate cert = keyStore.getCertificate(keyAlias);
 
-            return new JcaX509CertificateConverter()
-                    .setProvider("BC")
-                    .getCertificate(holder);
+            if (!(cert instanceof X509Certificate)) {
+                throw new CertificateIssueException("KeyStore 中未找到 CA 证书");
+            }
+
+            return (X509Certificate) cert;
+
+        } catch (CertificateIssueException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new CertificateIssueException("加载 CA 证书失败：" + e.getMessage(), e);
         }
     }
+
 
     // 解析PEM格式公钥
     private static PublicKey parsePublicKey(String pem) throws Exception {
@@ -315,39 +317,25 @@ public class CertificateUtil {
     }
 
 
-    // 将公钥转换为 PEM 格式字符串
-    // @param publicKey 公钥对象
-    // @return PEM 格式字符串
-    public static String publicKeyToPEM(PublicKey publicKey) {
-        String base64 = publicKeyToBase64(publicKey);
-        StringBuilder pem = new StringBuilder();
+    // 加载 KeyStore
+    private static KeyStore loadCaKeyStore() throws CertificateIssueException {
+        try {
+            String keystorePath = System.getenv("CA_KEYSTORE_PATH");
+            String keystorePassword = System.getenv("CA_KEYSTORE_PASSWORD");
 
-        if (publicKey.getAlgorithm().equalsIgnoreCase("RSA")) {
-            pem.append("-----BEGIN RSA PUBLIC KEY-----\n");
-        } else if (publicKey.getAlgorithm().equalsIgnoreCase("EC")) {
-            pem.append("-----BEGIN EC PUBLIC KEY-----\n");
-        } else if (publicKey.getAlgorithm().equalsIgnoreCase("DSA")) {
-            pem.append("-----BEGIN DSA PUBLIC KEY-----\n");
-        } else {
-            pem.append("-----BEGIN PUBLIC KEY-----\n");
+            if (keystorePath == null || keystorePassword == null) {
+                throw new CertificateIssueException("CA KeyStore 环境变量未配置");
+            }
+
+            KeyStore keyStore = KeyStore.getInstance("PKCS12");
+            try (InputStream is = new FileInputStream(keystorePath)) {
+                keyStore.load(is, keystorePassword.toCharArray());
+            }
+
+            return keyStore;
+
+        } catch (Exception e) {
+            throw new CertificateIssueException("加载 CA KeyStore 失败：" + e.getMessage(), e);
         }
-
-        // 每64个字符换行（PEM格式标准）
-        for (int i = 0; i < base64.length(); i += 64) {
-            int end = Math.min(base64.length(), i + 64);
-            pem.append(base64.substring(i, end)).append("\n");
-        }
-
-        if (publicKey.getAlgorithm().equalsIgnoreCase("RSA")) {
-            pem.append("-----END RSA PUBLIC KEY-----");
-        } else if (publicKey.getAlgorithm().equalsIgnoreCase("EC")) {
-            pem.append("-----END EC PUBLIC KEY-----");
-        } else if (publicKey.getAlgorithm().equalsIgnoreCase("DSA")) {
-            pem.append("-----END DSA PUBLIC KEY-----");
-        } else {
-            pem.append("-----END PUBLIC KEY-----");
-        }
-
-        return pem.toString();
     }
 }

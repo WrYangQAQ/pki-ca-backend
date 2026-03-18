@@ -25,7 +25,7 @@ public class JwtUtil {
                 .claim("role", role)
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + EXPIRE_MS))
-                .signWith(KEY)   // 关键修改点
+                .signWith(KEY)
                 .compact();
     }
 

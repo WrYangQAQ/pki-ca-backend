@@ -18,6 +18,7 @@ public class ChallengeService {
     public LoginChallenge generate(String username) {
         // 生成随机挑战字符串（移除UUID中的连字符）
         String challenge = UUID.randomUUID().toString().replace("-", "");
+
         // 设置挑战有效期为5分钟
         LocalDateTime expireAt = LocalDateTime.now().plusMinutes(5);
 

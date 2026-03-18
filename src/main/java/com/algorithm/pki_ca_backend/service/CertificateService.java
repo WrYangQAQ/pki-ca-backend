@@ -103,7 +103,7 @@ public class CertificateService {
             );
         }
 
-        // 5. 保存证书
+        // 5. 保存证书，将信息set到证书实体
         CertificateEntity cert = new CertificateEntity();
         cert.setUser(user);
         cert.setSerialNumber(serialNumber);
